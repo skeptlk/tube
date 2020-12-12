@@ -2,12 +2,12 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
-	"models"
 	"net"
 	"net/http"
 	"os"
@@ -15,14 +15,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	rice "github.com/GeertJohan/go.rice"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/dustin/go-humanize"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/prologic/tube/importers"
 	"github.com/prologic/tube/media"
+	"github.com/prologic/tube/models"
 	"github.com/prologic/tube/utils"
 	"github.com/renstrom/shortuuid"
 	log "github.com/sirupsen/logrus"
@@ -53,7 +56,7 @@ func NewApp(cfg *Config) (*App, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-	app := &App{
+	app := &App {
 		Config: cfg,
 	}
 	// Setup Library
@@ -114,6 +117,13 @@ func NewApp(cfg *Config) (*App, error) {
 	router.HandleFunc("/v/{id}", app.pageHandler).Methods("GET")
 	router.HandleFunc("/v/{prefix}/{id}", app.pageHandler).Methods("GET")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
+	
+	router.HandleFunc("/auth/user", app.createUserHandler).Methods("POST")
+	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST")
+	
+	api := router.PathPrefix("/api").Subrouter()
+	api.Use(app.JwtVerify)
+
 	// Static file handler
 	fsHandler := http.StripPrefix(
 		"/static",
@@ -160,7 +170,7 @@ func (app *App) Run() error {
 	}
 
 	for _, pc := range app.Config.Library {
-		p := &media.Path{
+		p := &media.Path {
 			Path:   pc.Path,
 			Prefix: pc.Prefix,
 		}
@@ -177,7 +187,7 @@ func (app *App) Run() error {
 
 	if err := os.MkdirAll(app.Config.Server.UploadPath, 0755); err != nil {
 		return fmt.Errorf(
-			"error creating upload path %s: %w",
+			"Error creating upload path %s: %w",
 			app.Config.Server.UploadPath, err,
 		)
 	}
@@ -745,26 +755,107 @@ func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
 
 // HTTP handler for /api/user
 func (app *App) createUserHandler(w http.ResponseWriter, r *http.Request) {
-	user := &models.User{}
+	user := &models.User {}
 	json.NewDecoder(r.Body).Decode(user)
 
 	pass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		fmt.Println(err)
-		err := ErrorResponse{
-			Err: "Password Encryption  failed",
-		}
-		json.NewEncoder(w).Encode(err)
+		app.panic(fmt.Errorf("Password encryption failed! %w", err), w)
+		return
 	}
 
 	user.Password = string(pass)
 
-	createdUser := app.DataBase.Create(user)
-	var errMessage = createdUser.Error
-
-	if createdUser.Error != nil {
-		fmt.Println(errMessage)
+	res := app.DataBase.Create(&user)
+	if res.Error != nil {
+		app.panic(fmt.Errorf("Failed to create user! %w", res.Error), w)
+		return
 	}
-	json.NewEncoder(w).Encode(createdUser)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
+
+func (app *App) panic(e error, w http.ResponseWriter) {
+	log.Error(e)
+	w.WriteHeader(http.StatusBadRequest)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.ErrResponse{Error: e.Error()})
+}
+
+func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
+	user := &models.User{}
+	err := json.NewDecoder(r.Body).Decode(user) 
+	if err != nil {
+		app.panic(err, w);
+		return;
+	}
+	resp, err := app.findUser(user.Email, user.Password)
+	if err != nil {
+		app.panic(err, w);
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func (app *App) findUser(email, password string) (map[string]interface{}, error) {
+	user := &models.User{}
+	err := app.DataBase.Where("email = ?", email).First(user).Error
+	if err != nil {
+		return nil, fmt.Errorf("Email address not found")
+	}
+	
+	expiresAt := time.Now().Add(time.Minute * 100000).Unix()
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	// Password does not match!
+	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { 
+		return nil, fmt.Errorf("Invalid login credentials. Please try again")
+	}
+
+	tk := &models.CustomClaims{
+		UserID: user.ID, 
+		Name: user.Name, 
+		Email: user.Email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expiresAt,
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tk)
+	tokenString, error := token.SignedString([]byte("secret"))
+	if error != nil {
+		fmt.Println(error)
+	}
+
+	var resp = map[string] interface{} {"status": false, "message": "Logged in successfully!"}
+	resp["token"] = tokenString //Store the token in the response
+	resp["user"] = user
+	return resp, nil
+}
+
+func (app *App) JwtVerify(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("x-access-token")
+		header = strings.TrimSpace(header)
+
+		if header == "" {
+			app.panic(fmt.Errorf("Missing auth token"), w)
+			return
+		}
+
+		tk := &models.CustomClaims{}
+		_, err := jwt.ParseWithClaims(header, tk, func(token *jwt.Token) (interface{}, error) {
+			return []byte("secret"), nil
+		})
+
+		if err != nil {
+			app.panic(err, w);
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "user", tk)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
