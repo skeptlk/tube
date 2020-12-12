@@ -1,5 +1,6 @@
 # tube
 
+This is my fork of [Tube](https://github.com/prologic/tube)
 `tube` is a Youtube-like (_without censorship and features you don't need!_)
 Video Sharing App written in Go which also supports automatic transcoding to
 MP4 H.265 AAC, multiple collections and RSS feed.
@@ -57,6 +58,7 @@ Where `DOCKER_MACHINE_IP` is the IP Address of your Docker Node.
 ### From Source
 
 ```#!sh
+$ apt install golang-rice ffmpeg ...
 $ git clone https://github.com/prologic/tube
 $ cd tube
 $ make

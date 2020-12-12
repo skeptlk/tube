@@ -2,10 +2,12 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
+	"models"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +26,9 @@ import (
 	"github.com/prologic/tube/utils"
 	"github.com/renstrom/shortuuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 //go:generate rice embed-go
@@ -38,42 +43,45 @@ type App struct {
 	Feed      []byte
 	Listener  net.Listener
 	Router    *mux.Router
+	DataBase  *gorm.DB
 }
+
+
 
 // NewApp returns a new instance of App from Config.
 func NewApp(cfg *Config) (*App, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-	a := &App{
+	app := &App{
 		Config: cfg,
 	}
 	// Setup Library
-	a.Library = media.NewLibrary()
+	app.Library = media.NewLibrary()
 	// Setup Store
 	store, err := NewBitcaskStore(cfg.Server.StorePath)
 	if err != nil {
 		err := fmt.Errorf("error opening store %s: %w", cfg.Server.StorePath, err)
 		return nil, err
 	}
-	a.Store = store
+	app.Store = store
 	// Setup Watcher
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	a.Watcher = w
+	app.Watcher = w
 	// Setup Listener
 	ln, err := newListener(cfg.Server)
 	if err != nil {
 		return nil, err
 	}
-	a.Listener = ln
+	app.Listener = ln
 
 	// Templates
 	box := rice.MustFindBox("../templates")
 
-	a.Templates = newTemplateStore("base")
+	app.Templates = newTemplateStore("base")
 
 	templateFuncs := map[string]interface{}{
 		"bytes": func(size int64) string { return humanize.Bytes(uint64(size)) },
@@ -82,36 +90,36 @@ func NewApp(cfg *Config) (*App, error) {
 	indexTemplate := template.New("index").Funcs(templateFuncs)
 	template.Must(indexTemplate.Parse(box.MustString("index.html")))
 	template.Must(indexTemplate.Parse(box.MustString("base.html")))
-	a.Templates.Add("index", indexTemplate)
+	app.Templates.Add("index", indexTemplate)
 
 	uploadTemplate := template.New("upload").Funcs(templateFuncs)
 	template.Must(uploadTemplate.Parse(box.MustString("upload.html")))
 	template.Must(uploadTemplate.Parse(box.MustString("base.html")))
-	a.Templates.Add("upload", uploadTemplate)
+	app.Templates.Add("upload", uploadTemplate)
 
 	importTemplate := template.New("import").Funcs(templateFuncs)
 	template.Must(importTemplate.Parse(box.MustString("import.html")))
 	template.Must(importTemplate.Parse(box.MustString("base.html")))
-	a.Templates.Add("import", importTemplate)
+	app.Templates.Add("import", importTemplate)
 
 	// Setup Router
-	r := mux.NewRouter().StrictSlash(true)
-	r.HandleFunc("/", a.indexHandler).Methods("GET", "OPTIONS")
-	r.HandleFunc("/upload", a.uploadHandler).Methods("GET", "OPTIONS", "POST")
-	r.HandleFunc("/import", a.importHandler).Methods("GET", "OPTIONS", "POST")
-	r.HandleFunc("/v/{id}.mp4", a.videoHandler).Methods("GET")
-	r.HandleFunc("/v/{prefix}/{id}.mp4", a.videoHandler).Methods("GET")
-	r.HandleFunc("/t/{id}", a.thumbHandler).Methods("GET")
-	r.HandleFunc("/t/{prefix}/{id}", a.thumbHandler).Methods("GET")
-	r.HandleFunc("/v/{id}", a.pageHandler).Methods("GET")
-	r.HandleFunc("/v/{prefix}/{id}", a.pageHandler).Methods("GET")
-	r.HandleFunc("/feed.xml", a.rssHandler).Methods("GET")
+	router := mux.NewRouter().StrictSlash(true)
+	router.HandleFunc("/", app.indexHandler).Methods("GET", "OPTIONS")
+	router.HandleFunc("/upload", app.uploadHandler).Methods("GET", "OPTIONS", "POST")
+	router.HandleFunc("/import", app.importHandler).Methods("GET", "OPTIONS", "POST")
+	router.HandleFunc("/v/{id}.mp4", app.videoHandler).Methods("GET")
+	router.HandleFunc("/v/{prefix}/{id}.mp4", app.videoHandler).Methods("GET")
+	router.HandleFunc("/t/{id}", app.thumbHandler).Methods("GET")
+	router.HandleFunc("/t/{prefix}/{id}", app.thumbHandler).Methods("GET")
+	router.HandleFunc("/v/{id}", app.pageHandler).Methods("GET")
+	router.HandleFunc("/v/{prefix}/{id}", app.pageHandler).Methods("GET")
+	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 	// Static file handler
 	fsHandler := http.StripPrefix(
 		"/static",
 		http.FileServer(rice.MustFindBox("../static").HTTPBox()),
 	)
-	r.PathPrefix("/static/").Handler(fsHandler).Methods("GET")
+	router.PathPrefix("/static/").Handler(fsHandler).Methods("GET")
 
 	cors := handlers.CORS(
 		handlers.AllowedHeaders([]string{
@@ -130,42 +138,57 @@ func NewApp(cfg *Config) (*App, error) {
 		handlers.AllowCredentials(),
 	)
 
-	r.Use(cors)
+	router.Use(cors)
 
-	a.Router = r
-	return a, nil
+	app.Router = router
+	return app, nil
+}
+
+//ConnectDB function: Make database connection
+func ConnectDB() (*gorm.DB, error) {
+	dsn := "tubeadmin:drowssap@tcp(127.0.0.1:3306)/nontube?charset=utf8mb4&parseTime=True&loc=Local"
+	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
 }
 
 // Run imports the library and starts server.
-func (a *App) Run() error {
-	for _, pc := range a.Config.Library {
+func (app *App) Run() error {
+	var err error
+	
+	app.DataBase, err = ConnectDB();
+	if err != nil {
+		return err
+	}
+
+	for _, pc := range app.Config.Library {
 		p := &media.Path{
 			Path:   pc.Path,
 			Prefix: pc.Prefix,
 		}
-		err := a.Library.AddPath(p)
+		err = app.Library.AddPath(p)
 		if err != nil {
 			return err
 		}
-		err = a.Library.Import(p)
+		err = app.Library.Import(p)
 		if err != nil {
 			return err
 		}
-		a.Watcher.Add(p.Path)
+		app.Watcher.Add(p.Path)
 	}
-	if err := os.MkdirAll(a.Config.Server.UploadPath, 0755); err != nil {
+
+	if err := os.MkdirAll(app.Config.Server.UploadPath, 0755); err != nil {
 		return fmt.Errorf(
 			"error creating upload path %s: %w",
-			a.Config.Server.UploadPath, err,
+			app.Config.Server.UploadPath, err,
 		)
 	}
-	buildFeed(a)
-	go startWatcher(a)
-	return http.Serve(a.Listener, a.Router)
+
+	buildFeed(app)
+	go startWatcher(app)
+	return http.Serve(app.Listener, app.Router)
 }
 
-func (a *App) render(name string, w http.ResponseWriter, ctx interface{}) {
-	buf, err := a.Templates.Exec(name, ctx)
+func (app *App) render(name string, w http.ResponseWriter, ctx interface{}) {
+	buf, err := app.Templates.Exec(name, ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -177,9 +200,9 @@ func (a *App) render(name string, w http.ResponseWriter, ctx interface{}) {
 }
 
 // HTTP handler for /
-func (a *App) indexHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("/")
-	pl := a.Library.Playlist()
+	pl := app.Library.Playlist()
 	if len(pl) > 0 {
 		http.Redirect(w, r, fmt.Sprintf("/v/%s?%s", pl[0].ID, r.URL.RawQuery), 302)
 	} else {
@@ -194,22 +217,22 @@ func (a *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 			Sort:     sort,
 			Quality:  quality,
 			Playing:  &media.Video{ID: ""},
-			Playlist: a.Library.Playlist(),
+			Playlist: app.Library.Playlist(),
 		}
 
-		a.render("index", w, ctx)
+		app.render("index", w, ctx)
 	}
 }
 
 // HTTP handler for /upload
-func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		ctx := map[string]interface{}{
-			"MAX_UPLOAD_SIZE": a.Config.Server.MaxUploadSize,
+			"MAX_UPLOAD_SIZE": app.Config.Server.MaxUploadSize,
 		}
-		a.render("upload", w, ctx)
+		app.render("upload", w, ctx)
 	} else if r.Method == "POST" {
-		r.ParseMultipartForm(a.Config.Server.MaxUploadSize)
+		r.ParseMultipartForm(app.Config.Server.MaxUploadSize)
 
 		file, handler, err := r.FormFile("video_file")
 		if err != nil {
@@ -225,15 +248,15 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Make collection user selectable from drop-down in Form
 		// XXX: Assume we can put uploaded videos into the first collection (sorted) we find
-		keys := make([]string, 0, len(a.Library.Paths))
-		for k := range a.Library.Paths {
+		keys := make([]string, 0, len(app.Library.Paths))
+		for k := range app.Library.Paths {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		collection := keys[0]
 
 		uf, err := ioutil.TempFile(
-			a.Config.Server.UploadPath,
+			app.Config.Server.UploadPath,
 			fmt.Sprintf("tube-upload-*%s", filepath.Ext(handler.Filename)),
 		)
 		if err != nil {
@@ -253,7 +276,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tf, err := ioutil.TempFile(
-			a.Config.Server.UploadPath,
+			app.Config.Server.UploadPath,
 			fmt.Sprintf("tube-transcode-*.mp4"),
 		)
 		if err != nil {
@@ -264,7 +287,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		vf := filepath.Join(
-			a.Library.Paths[collection].Path,
+			app.Library.Paths[collection].Path,
 			fmt.Sprintf("%s.mp4", shortuuid.New()),
 		)
 		thumbFn1 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(tf.Name(), filepath.Ext(tf.Name())))
@@ -272,7 +295,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Use a proper Job Queue and make this async
 		if err := utils.RunCmd(
-			a.Config.Transcoder.Timeout,
+			app.Config.Transcoder.Timeout,
 			"ffmpeg",
 			"-y",
 			"-i", uf.Name(),
@@ -291,7 +314,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := utils.RunCmd(
-			a.Config.Thumbnailer.Timeout,
+			app.Config.Thumbnailer.Timeout,
 			"mt",
 			"-b",
 			"-s",
@@ -320,7 +343,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Make this a background job
 		// Resize for lower quality options
-		for size, suffix := range a.Config.Transcoder.Sizes {
+		for size, suffix := range app.Config.Transcoder.Sizes {
 			log.
 				WithField("size", size).
 				WithField("vf", filepath.Base(vf)).
@@ -332,7 +355,7 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 			)
 
 			if err := utils.RunCmd(
-				a.Config.Transcoder.Timeout,
+				app.Config.Transcoder.Timeout,
 				"ffmpeg",
 				"-y",
 				"-i", vf,
@@ -360,10 +383,10 @@ func (a *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HTTP handler for /import
-func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) importHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		ctx := &struct{}{}
-		a.render("import", w, ctx)
+		app.render("import", w, ctx)
 	} else if r.Method == "POST" {
 		r.ParseMultipartForm(1024)
 
@@ -377,8 +400,8 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Make collection user selectable from drop-down in Form
 		// XXX: Assume we can put uploaded videos into the first collection (sorted) we find
-		keys := make([]string, 0, len(a.Library.Paths))
-		for k := range a.Library.Paths {
+		keys := make([]string, 0, len(app.Library.Paths))
+		for k := range app.Library.Paths {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -401,7 +424,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		uf, err := ioutil.TempFile(
-			a.Config.Server.UploadPath,
+			app.Config.Server.UploadPath,
 			fmt.Sprintf("tube-import-*.mp4"),
 		)
 		if err != nil {
@@ -428,14 +451,14 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if contentLength > a.Config.Server.MaxUploadSize {
+		if contentLength > app.Config.Server.MaxUploadSize {
 			err := fmt.Errorf(
 				"imported video would exceed maximum upload size of %s",
-				humanize.Bytes(uint64(a.Config.Server.MaxUploadSize)),
+				humanize.Bytes(uint64(app.Config.Server.MaxUploadSize)),
 			)
 			log.
 				WithField("contentLength", contentLength).
-				WithField("max_upload_size", a.Config.Server.MaxUploadSize).
+				WithField("max_upload_size", app.Config.Server.MaxUploadSize).
 				Error(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -451,7 +474,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tf, err := ioutil.TempFile(
-			a.Config.Server.UploadPath,
+			app.Config.Server.UploadPath,
 			fmt.Sprintf("tube-transcode-*.mp4"),
 		)
 		if err != nil {
@@ -462,7 +485,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		vf := filepath.Join(
-			a.Library.Paths[collection].Path,
+			app.Library.Paths[collection].Path,
 			fmt.Sprintf("%s.mp4", shortuuid.New()),
 		)
 		thumbFn1 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(tf.Name(), filepath.Ext(tf.Name())))
@@ -477,7 +500,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Use a proper Job Queue and make this async
 		if err := utils.RunCmd(
-			a.Config.Transcoder.Timeout,
+			app.Config.Transcoder.Timeout,
 			"ffmpeg",
 			"-y",
 			"-i", uf.Name(),
@@ -511,7 +534,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Make this a background job
 		// Resize for lower quality options
-		for size, suffix := range a.Config.Transcoder.Sizes {
+		for size, suffix := range app.Config.Transcoder.Sizes {
 			log.
 				WithField("size", size).
 				WithField("vf", filepath.Base(vf)).
@@ -523,7 +546,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 			)
 
 			if err := utils.RunCmd(
-				a.Config.Transcoder.Timeout,
+				app.Config.Transcoder.Timeout,
 				"ffmpeg",
 				"-y",
 				"-i", vf,
@@ -551,7 +574,7 @@ func (a *App) importHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HTTP handler for /v/id
-func (a *App) pageHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 	prefix, ok := vars["prefix"]
@@ -559,7 +582,7 @@ func (a *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 		id = path.Join(prefix, id)
 	}
 	log.Printf("/v/%s", id)
-	playing, ok := a.Library.Videos[id]
+	playing, ok := app.Library.Videos[id]
 	if !ok {
 		sort := strings.ToLower(r.URL.Query().Get("sort"))
 		quality := strings.ToLower(r.URL.Query().Get("quality"))
@@ -572,13 +595,13 @@ func (a *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 			Sort:     sort,
 			Quality:  quality,
 			Playing:  &media.Video{ID: ""},
-			Playlist: a.Library.Playlist(),
+			Playlist: app.Library.Playlist(),
 		}
-		a.render("upload", w, ctx)
+		app.render("upload", w, ctx)
 		return
 	}
 
-	views, err := a.Store.GetViews(id)
+	views, err := app.Store.GetViews(id)
 	if err != nil {
 		err := fmt.Errorf("error retrieving views for %s: %w", id, err)
 		log.Warn(err)
@@ -586,11 +609,11 @@ func (a *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 
 	playing.Views = views
 
-	playlist := a.Library.Playlist()
+	playlist := app.Library.Playlist()
 
 	// TODO: Optimize this? Bitcask has no concept of MultiGet / MGET
 	for _, video := range playlist {
-		views, err := a.Store.GetViews(video.ID)
+		views, err := app.Store.GetViews(video.ID)
 		if err != nil {
 			err := fmt.Errorf("error retrieving views for %s: %w", video.ID, err)
 			log.Warn(err)
@@ -629,11 +652,11 @@ func (a *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 		Playing:  playing,
 		Playlist: playlist,
 	}
-	a.render("index", w, ctx)
+	app.render("index", w, ctx)
 }
 
 // HTTP handler for /v/id.mp4
-func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -644,7 +667,7 @@ func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("/v/%s", id)
 
-	m, ok := a.Library.Videos[id]
+	m, ok := app.Library.Videos[id]
 	if !ok {
 		return
 	}
@@ -673,12 +696,12 @@ func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 		videoPath = m.Path
 	}
 
-	if err := a.Store.Migrate(prefix, id); err != nil {
+	if err := app.Store.Migrate(prefix, id); err != nil {
 		err := fmt.Errorf("error migrating store data: %w", err)
 		log.Warn(err)
 	}
 
-	if err := a.Store.IncViews(id); err != nil {
+	if err := app.Store.IncViews(id); err != nil {
 		err := fmt.Errorf("error updating view for %s: %w", id, err)
 		log.Warn(err)
 	}
@@ -691,7 +714,7 @@ func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HTTP handler for /t/id
-func (a *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 	prefix, ok := vars["prefix"]
@@ -699,7 +722,7 @@ func (a *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
 		id = path.Join(prefix, id)
 	}
 	log.Printf("/t/%s", id)
-	m, ok := a.Library.Videos[id]
+	m, ok := app.Library.Videos[id]
 	if !ok {
 		return
 	}
@@ -714,8 +737,34 @@ func (a *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HTTP handler for /feed.xml
-func (a *App) rssHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=7776000")
 	w.Header().Set("Content-Type", "text/xml")
-	w.Write(a.Feed)
+	w.Write(app.Feed)
 }
+
+// HTTP handler for /api/user
+func (app *App) createUserHandler(w http.ResponseWriter, r *http.Request) {
+	user := &models.User{}
+	json.NewDecoder(r.Body).Decode(user)
+
+	pass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		fmt.Println(err)
+		err := ErrorResponse{
+			Err: "Password Encryption  failed",
+		}
+		json.NewEncoder(w).Encode(err)
+	}
+
+	user.Password = string(pass)
+
+	createdUser := app.DataBase.Create(user)
+	var errMessage = createdUser.Error
+
+	if createdUser.Error != nil {
+		fmt.Println(errMessage)
+	}
+	json.NewEncoder(w).Encode(createdUser)
+}
+

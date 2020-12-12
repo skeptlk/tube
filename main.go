@@ -45,13 +45,13 @@ func main() {
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
 	}
-	a, err := app.NewApp(cfg)
+	instance, err := app.NewApp(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Local server: http://%s", addr)
-	err = a.Run()
+	err = instance.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
