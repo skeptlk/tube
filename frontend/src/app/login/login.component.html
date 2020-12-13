@@ -1,0 +1,12 @@
+
+<form clrForm [formGroup]="loginForm">
+    <clr-input-container>
+        <label>Name</label>
+        <input clrInput type="text" formControlName="name" name="name" />
+    </clr-input-container>
+    <clr-input-container>
+        <label>Password</label>
+        <input clrInput type="password" formControlName="password" name="password" />
+    </clr-input-container>
+    <button (click)="submit()" class="btn btn-primary">Login</button>
+</form>

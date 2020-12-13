@@ -7,8 +7,11 @@
 /tube
 /.DS_Store
 
+/node_modules
+
 videos/*
 !videos/README.md
 
 uploads/*
 !uploads/README.md
+

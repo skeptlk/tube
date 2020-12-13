@@ -33,4 +33,4 @@ release:
 	@./tools/release.sh
 
 clean:
-	@git clean -f -d -X
+	@git clean -f -d

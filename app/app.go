@@ -118,8 +118,8 @@ func NewApp(cfg *Config) (*App, error) {
 	router.HandleFunc("/v/{prefix}/{id}", app.pageHandler).Methods("GET")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 	
-	router.HandleFunc("/auth/user", app.createUserHandler).Methods("POST")
-	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST")
+	router.HandleFunc("/auth/user", app.createUserHandler).Methods("POST", "OPTIONS")
+	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST", "OPTIONS")
 	
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(app.JwtVerify)
@@ -791,7 +791,7 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 		app.panic(err, w);
 		return;
 	}
-	resp, err := app.findUser(user.Email, user.Password)
+	resp, err := app.findUser(user.Name, user.Password)
 	if err != nil {
 		app.panic(err, w);
 	} else {
@@ -800,11 +800,11 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (app *App) findUser(email, password string) (map[string]interface{}, error) {
+func (app *App) findUser(name, password string) (map[string]interface{}, error) {
 	user := &models.User{}
-	err := app.DataBase.Where("email = ?", email).First(user).Error
+	err := app.DataBase.Where("name = ?", name).First(user).Error
 	if err != nil {
-		return nil, fmt.Errorf("Email address not found")
+		return nil, fmt.Errorf("User name not found")
 	}
 	
 	expiresAt := time.Now().Add(time.Minute * 100000).Unix()
@@ -841,7 +841,7 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 		header = strings.TrimSpace(header)
 
 		if header == "" {
-			app.panic(fmt.Errorf("Missing auth token"), w)
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -851,7 +851,7 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 		})
 
 		if err != nil {
-			app.panic(err, w);
+			next.ServeHTTP(w, r)
 			return
 		}
 
