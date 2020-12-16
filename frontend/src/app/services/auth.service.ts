@@ -19,7 +19,7 @@ export class AuthService {
         return this.currentUserSubject.value;
     }
 
-    login(data : { name: string, password: string }) {
+    public login(data : { name: string, password: string }) {
         return this.http.post<any>(`http://localhost:8000/auth/login`, data)
             .pipe(map(user => {
                 localStorage.setItem('currentUser', JSON.stringify(user));
@@ -28,7 +28,7 @@ export class AuthService {
             }));
     }
 
-    logout() {
+    public logout() {
         // remove user from local storage to log user out
         localStorage.removeItem('currentUser');
         this.currentUserSubject.next(null);

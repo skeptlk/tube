@@ -1,12 +1,16 @@
 import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
-export class ErrorService {
+export class NotificationService {
 
     constructor() {}
 
-    error(e) {
+    error(err: any) {
         // ...
+    }
+
+    message(msg: string) {
+        alert(msg);
     }
 
 }

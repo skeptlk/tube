@@ -7,6 +7,7 @@ import { SearchComponent } from './search/search.component';
 import { UploadComponent } from './upload/upload.component';
 import { AuthGuard } from './helpers';
 import { LoginComponent } from './login/login.component';
+import { SignupComponent } from './signup/signup.component';
 
 
 const routes: Routes = [
@@ -16,6 +17,7 @@ const routes: Routes = [
     { path: 'account', component: AccountComponent, canActivate: [AuthGuard] },
     { path: 'search', component: SearchComponent },
     { path: 'login', component: LoginComponent },
+    { path: 'signup', component: SignupComponent },
     { path: '**', redirectTo: '' }
 ];
 

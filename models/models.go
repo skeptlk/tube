@@ -1,21 +1,34 @@
 package models
 
 import (
+	"time"
+
 	"github.com/dgrijalva/jwt-go"
 	"gorm.io/gorm"
 )
 
 // User model
 type User struct {
-	gorm.Model
-	Name string `json:"name"`
-	Email string `json:"email" gorm:"type:varchar(100);unique_index"`
-	Password string `json:"password"`
+	ID uint						`gorm:"primaryKey"`
+	Name string 				`json:"name"`
+	Email string 				`json:"email" gorm:"unique_index"`
+	Password string 			`json:"password"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt 	`gorm:"index"`
 }
 
 // Video model
 type Viedo struct {
-	gorm.Model
+	ID uint						`gorm:"primaryKey"`
+
+	UserID uint
+	Title string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt 	`gorm:"index"`
 }
 
 // ErrResponse - Error response

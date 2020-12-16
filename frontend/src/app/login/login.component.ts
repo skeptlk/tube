@@ -1,15 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { first } from 'rxjs/operators';
-import { AuthService, ErrorService } from '../services';
+import { AuthService, NotificationService } from '../services';
 
 @Component({
-    selector: 'app-login',
+    selector: 'login',
     templateUrl: './login.component.html',
     styleUrls: ['./login.component.scss']
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent {
 
     loginForm = new FormGroup({
         name: new FormControl('', [Validators.required]),
@@ -17,25 +17,18 @@ export class LoginComponent implements OnInit {
     })
 
     constructor(
-        private errorService: ErrorService,
+        private notifService: NotificationService,
         private auth: AuthService,
         private router: Router,
     ) { }
 
-    ngOnInit(): void {
-    }
-
     submit() {
         if (this.loginForm.valid) {
-            console.log(this.loginForm.value);
-
             this.auth.login(this.loginForm.value)
                 .pipe(first())
                 .subscribe(
-                    () => {
-                        this.router.navigate(['']);
-                    },
-                    error => this.errorService.error(error));
+                    () => this.router.navigate(['']),
+                    (error) => this.notifService.error(error));
         }
     }
 

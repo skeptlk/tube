@@ -6,8 +6,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-import { JwtInterceptor } from './heplers';
-import { ErrorInterceptor } from './heplers/error.interceptor';
+import { JwtInterceptor, ErrorInterceptor } from './helpers';
 
 import { AppComponent } from './app.component';
 import { HomeComponent } from './home/home.component';
@@ -16,6 +15,7 @@ import { AccountComponent } from './account/account.component';
 import { UploadComponent } from './upload/upload.component';
 import { SearchComponent } from './search/search.component';
 import { LoginComponent } from './login/login.component';
+import { SignupComponent } from './signup/signup.component';
 
 
 @NgModule({
@@ -26,7 +26,8 @@ import { LoginComponent } from './login/login.component';
         AccountComponent,
         UploadComponent,
         SearchComponent,
-        LoginComponent
+        LoginComponent,
+        SignupComponent
     ],
     imports: [
         BrowserModule,

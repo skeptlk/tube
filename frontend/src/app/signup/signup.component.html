@@ -3,10 +3,14 @@
     <div class="clr-col-lg-6 clr-offset-lg-3 clr-col-12">
         <div class="card">
             <div class="card-block">
-                <form clrForm [formGroup]="loginForm">
+                <form clrForm [formGroup]="signupForm">
                     <clr-input-container>
                         <label>Name</label>
                         <input clrInput type="text" formControlName="name" name="name" />
+                    </clr-input-container>
+                    <clr-input-container>
+                        <label>Email</label>
+                        <input clrInput type="email" formControlName="email" name="email" />
                     </clr-input-container>
                     <clr-input-container>
                         <label>Password</label>
@@ -16,10 +20,10 @@
             </div>
             <div class="card-footer text-center">
                 <div>
-                    Don't have an account yet?
-                    <a routerLink="/signup" class="nav-link nav-text">Sign up</a>
+                    Already have an account?
+                    <a routerLink="/login" class="nav-link nav-text">Log in</a>
                 </div>
-                <button (click)="submit()" class="btn btn-primary">Login</button>
+                <button (click)="submit()" class="btn btn-primary">Create an account</button>
             </div>
         </div>
     </div>
