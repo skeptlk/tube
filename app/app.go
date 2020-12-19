@@ -123,7 +123,7 @@ func NewApp(cfg *Config) (*App, error) {
 	
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(app.JwtVerify)
-	router.HandleFunc("/upload", app.loginHandler).Methods("POST", "OPTIONS")
+	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
 
 	// Static file handler
 	fsHandler := http.StripPrefix(
@@ -761,7 +761,8 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	pass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		app.panic(fmt.Errorf("Password encryption failed! %w", err), w)
+		http.Error(w, "Password encryption failed!", http.StatusInternalServerError)
+		log.Error(err)
 		return
 	}
 
@@ -769,7 +770,8 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	res := app.DataBase.Create(&user)
 	if res.Error != nil {
-		app.panic(fmt.Errorf("Failed to create user! %w", res.Error), w)
+		http.Error(w, "Failed to create user!", http.StatusInternalServerError)
+		log.Error(res.Error)
 		return
 	}
 
@@ -778,24 +780,27 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-func (app *App) panic(e error, w http.ResponseWriter) {
-	log.Error(e)
-	w.WriteHeader(http.StatusBadRequest)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.ErrResponse{Error: e.Error()})
-}
+// func (app *App) panic(e error, w http.ResponseWriter) {
+// 	log.Error(e)
+// 	w.WriteHeader(http.StatusBadRequest)
+// 	w.Header().Set("Content-Type", "application/json")
+// 	json.NewEncoder(w).Encode(models.ErrResponse{Error: e.Error()})
+// }
 
 // HTTP handler for /auth/login
 func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 	user := &models.User{}
 	err := json.NewDecoder(r.Body).Decode(user) 
 	if err != nil {
-		app.panic(err, w);
+		http.Error(w, "Login failed", http.StatusBadRequest)
+		log.Error(err)
 		return;
 	}
 	resp, err := app.findUser(user.Name, user.Password)
 	if err != nil {
-		app.panic(err, w);
+		http.Error(w, "Login failed", http.StatusBadRequest)
+		log.Error(err)
+		return
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -839,11 +844,14 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 
 func (app *App) JwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("x-access-token")
+		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
 
+		log.Info(header);
+
 		if header == "" {
-			next.ServeHTTP(w, r)
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Token is not provided"))
 			return
 		}
 
@@ -852,13 +860,13 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 			return []byte("secret"), nil
 		})
 
-		if err != nil {
-			next.ServeHTTP(w, r)
-			return
+		if err == nil {
+			ctx := context.WithValue(r.Context(), "userID", tk.UserID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Authentication error"))
 		}
-
-		ctx := context.WithValue(r.Context(), "user", tk)
-		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -867,130 +875,131 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	file, handler, err := r.FormFile("video")
 	if err != nil {
-		err := fmt.Errorf("error processing form: %w", err)
 		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer file.Close()
 
-	title := r.FormValue("title")
-	description := r.FormValue("description")
+	// CREATE VIDEO OBJECT
+	vid := &models.Video {}
 
-	// TODO: Make collection user selectable from drop-down in Form
-	// XXX: Assume we can put uploaded videos into the first collection (sorted) we find
-	keys := make([]string, 0, len(app.Library.Paths))
-	for k := range app.Library.Paths {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	collection := keys[0]
+	vid.Title = r.FormValue("title")
+	vid.Description = r.FormValue("description")
+	uid_ctx := r.Context().Value("userID")
+	vid.UserID = uid_ctx.(uint)
 
-	uf, err := ioutil.TempFile(
+	// CREATE TEMP COPY OF VIDEO 
+	tempCopy, err := ioutil.TempFile(
 		app.Config.Server.UploadPath,
 		fmt.Sprintf("tube-upload-*%s", filepath.Ext(handler.Filename)),
 	)
 	if err != nil {
-		app.panic(fmt.Errorf("error creating temporary file for uploading: %w", err), w);
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Error(err, w)
 		return
 	}
-	defer os.Remove(uf.Name())
+	defer os.Remove(tempCopy.Name())
 
-	_, err = io.Copy(uf, file)
+	_, err = io.Copy(tempCopy, file)
 	if err != nil {
-		app.panic(fmt.Errorf("error writing file: %w", err), w)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Error(err, w)
 		return
 	}
 
-	tf, err := ioutil.TempFile(
+	transcodeFile, err := ioutil.TempFile(
 		app.Config.Server.UploadPath,
 		fmt.Sprintf("tube-transcode-*.mp4"),
 	)
+	log.Info(fmt.Sprintf("Transcode file name: %s", transcodeFile.Name()))
 	if err != nil {
-		app.panic(fmt.Errorf("error creating temporary file for transcoding: %w", err), w)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Error(err, w)
 		return
 	}
 
-	vf := filepath.Join(
-		app.Library.Paths[collection].Path,
-		fmt.Sprintf("%s.mp4", shortuuid.New()),
-	)
-	thumbFn1 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(tf.Name(), filepath.Ext(tf.Name())))
-	thumbFn2 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(vf, filepath.Ext(vf)))
+	// CREATE THUMBNAIL
+	uniqueName := fmt.Sprintf("%s.mp4", shortuuid.New())
+	destVid := filepath.Join(app.Config.Server.UploadPath, uniqueName)
+	tempThumb := fmt.Sprintf("%s.jpg", strings.TrimSuffix(transcodeFile.Name(), ".mp4"))
+	destThumb := fmt.Sprintf("%s.jpg", strings.TrimSuffix(destVid, filepath.Ext(destVid)))
 
-	// TODO: Use a proper Job Queue and make this async
+	vid.URL = destVid;
+	vid.ThumbnailURL = destThumb;
+
 	if err := utils.RunCmd(
 		app.Config.Transcoder.Timeout,
-		"ffmpeg", "-y", "-i", uf.Name(),
+		"ffmpeg", "-y", "-i", tempCopy.Name(),
 		"-vcodec", "h264", "-acodec", "aac",
 		"-strict", "-2", "-loglevel", "quiet",
-		"-metadata", fmt.Sprintf("title=%s", title),
-		"-metadata", fmt.Sprintf("comment=%s", description),
-		tf.Name(),
+		"-metadata", fmt.Sprintf("title=%s", vid.Title),
+		"-metadata", fmt.Sprintf("comment=%s", vid.Description),
+		transcodeFile.Name(),
 	); err != nil {
-		err := fmt.Errorf("error transcoding video: %w", err)
-		log.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error(fmt.Errorf("Error transcoding video: %w", err))
+		http.Error(w, "Can't process this file", http.StatusInternalServerError)
 		return
 	}
 
-	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, "mt", "-b", "-s", "-n", "1", tf.Name()); 
+	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, 
+		"mt", "-b", "-s", "-n", "1", 
+		transcodeFile.Name()); 
 	if err != nil {
-		err := fmt.Errorf("error generating thumbnail: %w", err)
 		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := os.Rename(thumbFn1, thumbFn2); err != nil {
-		err := fmt.Errorf("error renaming generated thumbnail: %w", err)
+	if err := os.Rename(tempThumb, destThumb); err != nil {
 		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := os.Rename(tf.Name(), vf); err != nil {
-		err := fmt.Errorf("error renaming transcoded video: %w", err)
+	if err := os.Rename(transcodeFile.Name(), destVid); err != nil {
 		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	res := app.DataBase.Create(&vid)
+	if res.Error != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
+
+	
+	fmt.Fprintf(w, "Video successfully uploaded!")
+	
+}
 
 	// TODO: Make this a background job
 	// Resize for lower quality options
-	for size, suffix := range app.Config.Transcoder.Sizes {
-		log.
-			WithField("size", size).
-			WithField("vf", filepath.Base(vf)).
-			Info("resizing video for lower quality playback")
-		sf := fmt.Sprintf(
-			"%s#%s.mp4",
-			strings.TrimSuffix(vf, filepath.Ext(vf)),
-			suffix,
-		)
+	// for size, suffix := range app.Config.Transcoder.Sizes {
+	// 	log.
+	// 		WithField("size", size).
+	// 		WithField("vf", filepath.Base(vf)).
+	// 		Info("resizing video for lower quality playback")
+	// 	sf := fmt.Sprintf(
+	// 		"%s#%s.mp4",
+	// 		strings.TrimSuffix(vf, filepath.Ext(vf)),
+	// 		suffix,
+	// 	)
+	// 	if err := utils.RunCmd(
+	// 		app.Config.Transcoder.Timeout,
+	// 		"ffmpeg", "-y", "-i", vf, "-s", size,
+	// 		"-c:v", "libx264", "-c:a", "aac",
+	// 		"-crf", "18", "-strict", "-2", "-loglevel", "quiet",
+	// 		"-metadata", fmt.Sprintf("title=%s", title),
+	// 		"-metadata", fmt.Sprintf("comment=%s", description),
+	// 		sf,
+	// 	); err != nil {
+	// 		err := fmt.Errorf("error transcoding video: %w", err)
+	// 		log.Error(err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// }
 
-		if err := utils.RunCmd(
-			app.Config.Transcoder.Timeout,
-			"ffmpeg",
-			"-y",
-			"-i", vf,
-			"-s", size,
-			"-c:v", "libx264",
-			"-c:a", "aac",
-			"-crf", "18",
-			"-strict", "-2",
-			"-loglevel", "quiet",
-			"-metadata", fmt.Sprintf("title=%s", title),
-			"-metadata", fmt.Sprintf("comment=%s", description),
-			sf,
-		); err != nil {
-			err := fmt.Errorf("error transcoding video: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	fmt.Fprintf(w, "Video successfully uploaded!")
-
-}

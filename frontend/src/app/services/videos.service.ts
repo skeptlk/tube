@@ -1,4 +1,4 @@
-import { HttpClient } from "@angular/common/http";
+import { HttpClient, HttpHeaders } from "@angular/common/http";
 import { Injectable } from "@angular/core";
 import { map } from "rxjs/operators";
 
@@ -7,8 +7,8 @@ export class VideoService {
 
     constructor(private http: HttpClient) {}
 
-    public create(data: { name: string, email: string, password: string }) {
-        return this.http.post<any>(`http://localhost:8000/api/user`, data)
+    public upload(data: any) {
+        return this.http.post<any>(`http://localhost:8000/api/video`, data)
         .pipe(map(user => {
 
             return user;

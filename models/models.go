@@ -14,17 +14,23 @@ type User struct {
 	Email string 				`json:"email" gorm:"unique_index"`
 	Password string 			`json:"password"`
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt 	`gorm:"index"`
+	CreatedAt time.Time			`json:"-"`
+	UpdatedAt time.Time			`json:"-"`
+	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
 
 // Video model
-type Viedo struct {
+type Video struct {
 	ID uint						`gorm:"primaryKey"`
 
-	UserID uint
-	Title string
+	UserID uint					`json:"userId"`
+	Title string				`json:"title"`
+	Description string			`json:"description"`
+	Duration int				`json:"duration"`
+	Likes int					`json:"likes"`
+	Dislikes int				`json:"dislikes"`
+	URL string					`json:"url"`
+	ThumbnailURL string			`json:"thumbnail"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
