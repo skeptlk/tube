@@ -9,7 +9,7 @@ import (
 
 // User model
 type User struct {
-	ID uint						`gorm:"primaryKey"`
+	ID uint						`gorm:"primaryKey" json:"id"`
 	Name string 				`json:"name"`
 	Email string 				`json:"email" gorm:"unique_index"`
 	Password string 			`json:"password"`
@@ -21,20 +21,21 @@ type User struct {
 
 // Video model
 type Video struct {
-	ID uint						`gorm:"primaryKey"`
+	ID uint						`gorm:"primaryKey" json:"id"`
 
 	UserID uint					`json:"userId"`
 	Title string				`json:"title"`
 	Description string			`json:"description"`
 	Duration int				`json:"duration"`
+	Views int					`json:"views"`
 	Likes int					`json:"likes"`
 	Dislikes int				`json:"dislikes"`
 	URL string					`json:"url"`
 	ThumbnailURL string			`json:"thumbnail"`
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt 	`gorm:"index"`
+	CreatedAt time.Time			`json:"-"`
+	UpdatedAt time.Time			`json:"-"`
+	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
 
 // ErrResponse - Error response

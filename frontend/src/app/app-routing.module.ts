@@ -1,13 +1,14 @@
 import { NgModule } from '@angular/core';
 import { Routes, RouterModule } from '@angular/router';
+import { AuthGuard } from './helpers';
 import { AccountComponent } from './account/account.component';
 import { AdminComponent } from './admin/admin.component';
 import { HomeComponent } from './home/home.component';
 import { SearchComponent } from './search/search.component';
 import { UploadComponent } from './upload/upload.component';
-import { AuthGuard } from './helpers';
 import { LoginComponent } from './login/login.component';
 import { SignupComponent } from './signup/signup.component';
+import { VideoComponent } from './video/video.component';
 
 
 const routes: Routes = [
@@ -18,6 +19,7 @@ const routes: Routes = [
     { path: 'search', component: SearchComponent },
     { path: 'login', component: LoginComponent },
     { path: 'signup', component: SignupComponent },
+    { path: 'v/:id', component: VideoComponent },
     { path: '**', redirectTo: '' }
 ];
 

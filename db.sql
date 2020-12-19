@@ -25,6 +25,7 @@ CREATE TABLE `videos` (
     `url` varchar(511) NOT NULL,
     `thumbnail_url` varchar(511),
     `duration` int,
+    `views` int,
     `likes` int,
     `dislikes` int,
     `created_at` timestamp,

@@ -16,6 +16,7 @@ import { UploadComponent } from './upload/upload.component';
 import { SearchComponent } from './search/search.component';
 import { LoginComponent } from './login/login.component';
 import { SignupComponent } from './signup/signup.component';
+import { VideoComponent } from './video/video.component';
 
 
 @NgModule({
@@ -27,7 +28,8 @@ import { SignupComponent } from './signup/signup.component';
         UploadComponent,
         SearchComponent,
         LoginComponent,
-        SignupComponent
+        SignupComponent,
+        VideoComponent
     ],
     imports: [
         BrowserModule,

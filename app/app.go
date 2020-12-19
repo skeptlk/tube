@@ -13,7 +13,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -23,7 +22,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/prologic/tube/importers"
 	"github.com/prologic/tube/media"
 	"github.com/prologic/tube/models"
 	"github.com/prologic/tube/utils"
@@ -100,22 +98,14 @@ func NewApp(cfg *Config) (*App, error) {
 	template.Must(uploadTemplate.Parse(box.MustString("base.html")))
 	app.Templates.Add("upload", uploadTemplate)
 
-	importTemplate := template.New("import").Funcs(templateFuncs)
-	template.Must(importTemplate.Parse(box.MustString("import.html")))
-	template.Must(importTemplate.Parse(box.MustString("base.html")))
-	app.Templates.Add("import", importTemplate)
-
 	// Setup Router
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", app.indexHandler).Methods("GET", "OPTIONS")
-	router.HandleFunc("/upload", app.uploadHandler).Methods("GET", "OPTIONS", "POST")
-	router.HandleFunc("/import", app.importHandler).Methods("GET", "OPTIONS", "POST")
-	router.HandleFunc("/v/{id}.mp4", app.videoHandler).Methods("GET")
-	router.HandleFunc("/v/{prefix}/{id}.mp4", app.videoHandler).Methods("GET")
+	// router.HandleFunc("/upload", app.uploadHandler).Methods("GET", "OPTIONS", "POST")
+	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
+	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/t/{id}", app.thumbHandler).Methods("GET")
 	router.HandleFunc("/t/{prefix}/{id}", app.thumbHandler).Methods("GET")
-	router.HandleFunc("/v/{id}", app.pageHandler).Methods("GET")
-	router.HandleFunc("/v/{prefix}/{id}", app.pageHandler).Methods("GET")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 	
 	router.HandleFunc("/auth/signup", app.apiCreateUserHandler).Methods("POST", "OPTIONS")
@@ -235,356 +225,9 @@ func (app *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HTTP handler for /upload
-func (app *App) uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		ctx := map[string]interface{}{
-			"MAX_UPLOAD_SIZE": app.Config.Server.MaxUploadSize,
-		}
-		app.render("upload", w, ctx)
-	} else if r.Method == "POST" {
-		r.ParseMultipartForm(app.Config.Server.MaxUploadSize)
-
-		file, handler, err := r.FormFile("video_file")
-		if err != nil {
-			err := fmt.Errorf("error processing form: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer file.Close()
-
-		title := r.FormValue("video_title")
-		description := r.FormValue("video_description")
-
-		// TODO: Make collection user selectable from drop-down in Form
-		// XXX: Assume we can put uploaded videos into the first collection (sorted) we find
-		keys := make([]string, 0, len(app.Library.Paths))
-		for k := range app.Library.Paths {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		collection := keys[0]
-
-		uf, err := ioutil.TempFile(
-			app.Config.Server.UploadPath,
-			fmt.Sprintf("tube-upload-*%s", filepath.Ext(handler.Filename)),
-		)
-		if err != nil {
-			err := fmt.Errorf("error creating temporary file for uploading: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer os.Remove(uf.Name())
-
-		_, err = io.Copy(uf, file)
-		if err != nil {
-			err := fmt.Errorf("error writing file: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		tf, err := ioutil.TempFile(
-			app.Config.Server.UploadPath,
-			fmt.Sprintf("tube-transcode-*.mp4"),
-		)
-		if err != nil {
-			err := fmt.Errorf("error creating temporary file for transcoding: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		vf := filepath.Join(
-			app.Library.Paths[collection].Path,
-			fmt.Sprintf("%s.mp4", shortuuid.New()),
-		)
-		thumbFn1 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(tf.Name(), filepath.Ext(tf.Name())))
-		thumbFn2 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(vf, filepath.Ext(vf)))
-
-		// TODO: Use a proper Job Queue and make this async
-		if err := utils.RunCmd(
-			app.Config.Transcoder.Timeout,
-			"ffmpeg",
-			"-y",
-			"-i", uf.Name(),
-			"-vcodec", "h264",
-			"-acodec", "aac",
-			"-strict", "-2",
-			"-loglevel", "quiet",
-			"-metadata", fmt.Sprintf("title=%s", title),
-			"-metadata", fmt.Sprintf("comment=%s", description),
-			tf.Name(),
-		); err != nil {
-			err := fmt.Errorf("error transcoding video: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := utils.RunCmd(
-			app.Config.Thumbnailer.Timeout,
-			"mt",
-			"-b",
-			"-s",
-			"-n", "1",
-			tf.Name(),
-		); err != nil {
-			err := fmt.Errorf("error generating thumbnail: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := os.Rename(thumbFn1, thumbFn2); err != nil {
-			err := fmt.Errorf("error renaming generated thumbnail: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := os.Rename(tf.Name(), vf); err != nil {
-			err := fmt.Errorf("error renaming transcoded video: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// TODO: Make this a background job
-		// Resize for lower quality options
-		for size, suffix := range app.Config.Transcoder.Sizes {
-			log.
-				WithField("size", size).
-				WithField("vf", filepath.Base(vf)).
-				Info("resizing video for lower quality playback")
-			sf := fmt.Sprintf(
-				"%s#%s.mp4",
-				strings.TrimSuffix(vf, filepath.Ext(vf)),
-				suffix,
-			)
-
-			if err := utils.RunCmd(
-				app.Config.Transcoder.Timeout,
-				"ffmpeg",
-				"-y",
-				"-i", vf,
-				"-s", size,
-				"-c:v", "libx264",
-				"-c:a", "aac",
-				"-crf", "18",
-				"-strict", "-2",
-				"-loglevel", "quiet",
-				"-metadata", fmt.Sprintf("title=%s", title),
-				"-metadata", fmt.Sprintf("comment=%s", description),
-				sf,
-			); err != nil {
-				err := fmt.Errorf("error transcoding video: %w", err)
-				log.Error(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		fmt.Fprintf(w, "Video successfully uploaded!")
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// HTTP handler for /import
-func (app *App) importHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		ctx := &struct{}{}
-		app.render("import", w, ctx)
-	} else if r.Method == "POST" {
-		r.ParseMultipartForm(1024)
-
-		url := r.FormValue("url")
-		if url == "" {
-			err := fmt.Errorf("error, no url supplied")
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// TODO: Make collection user selectable from drop-down in Form
-		// XXX: Assume we can put uploaded videos into the first collection (sorted) we find
-		keys := make([]string, 0, len(app.Library.Paths))
-		for k := range app.Library.Paths {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		collection := keys[0]
-
-		videoImporter, err := importers.NewImporter(url)
-		if err != nil {
-			err := fmt.Errorf("error creating video importer for %s: %w", url, err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		videoInfo, err := videoImporter.GetVideoInfo(url)
-		if err != nil {
-			err := fmt.Errorf("error retriving video info for %s: %w", url, err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		uf, err := ioutil.TempFile(
-			app.Config.Server.UploadPath,
-			fmt.Sprintf("tube-import-*.mp4"),
-		)
-		if err != nil {
-			err := fmt.Errorf("error creating temporary file for importing: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer os.Remove(uf.Name())
-
-		log.WithField("video_url", videoInfo.VideoURL).Info("requesting video size")
-
-		res, err := http.Head(videoInfo.VideoURL)
-		if err != nil {
-			err := fmt.Errorf("error getting size of video %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		contentLength := utils.SafeParseInt64(res.Header.Get("Content-Length"), -1)
-		if contentLength == -1 {
-			err := fmt.Errorf("error calculating size of video")
-			log.WithField("contentLength", contentLength).Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if contentLength > app.Config.Server.MaxUploadSize {
-			err := fmt.Errorf(
-				"imported video would exceed maximum upload size of %s",
-				humanize.Bytes(uint64(app.Config.Server.MaxUploadSize)),
-			)
-			log.
-				WithField("contentLength", contentLength).
-				WithField("max_upload_size", app.Config.Server.MaxUploadSize).
-				Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		log.WithField("contentLength", contentLength).Info("downloading video")
-
-		if err := utils.Download(videoInfo.VideoURL, uf.Name()); err != nil {
-			err := fmt.Errorf("error downloading video %s: %w", url, err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		tf, err := ioutil.TempFile(
-			app.Config.Server.UploadPath,
-			fmt.Sprintf("tube-transcode-*.mp4"),
-		)
-		if err != nil {
-			err := fmt.Errorf("error creating temporary file for transcoding: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		vf := filepath.Join(
-			app.Library.Paths[collection].Path,
-			fmt.Sprintf("%s.mp4", shortuuid.New()),
-		)
-		thumbFn1 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(tf.Name(), filepath.Ext(tf.Name())))
-		thumbFn2 := fmt.Sprintf("%s.jpg", strings.TrimSuffix(vf, filepath.Ext(vf)))
-
-		if err := utils.Download(videoInfo.ThumbnailURL, thumbFn1); err != nil {
-			err := fmt.Errorf("error downloading thumbnail: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// TODO: Use a proper Job Queue and make this async
-		if err := utils.RunCmd(
-			app.Config.Transcoder.Timeout,
-			"ffmpeg",
-			"-y",
-			"-i", uf.Name(),
-			"-vcodec", "h264",
-			"-acodec", "aac",
-			"-strict", "-2",
-			"-loglevel", "quiet",
-			"-metadata", fmt.Sprintf("title=%s", videoInfo.Title),
-			"-metadata", fmt.Sprintf("comment=%s", videoInfo.Description),
-			tf.Name(),
-		); err != nil {
-			err := fmt.Errorf("error transcoding video: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := os.Rename(thumbFn1, thumbFn2); err != nil {
-			err := fmt.Errorf("error renaming generated thumbnail: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := os.Rename(tf.Name(), vf); err != nil {
-			err := fmt.Errorf("error renaming transcoded video: %w", err)
-			log.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// TODO: Make this a background job
-		// Resize for lower quality options
-		for size, suffix := range app.Config.Transcoder.Sizes {
-			log.
-				WithField("size", size).
-				WithField("vf", filepath.Base(vf)).
-				Info("resizing video for lower quality playback")
-			sf := fmt.Sprintf(
-				"%s#%s.mp4",
-				strings.TrimSuffix(vf, filepath.Ext(vf)),
-				suffix,
-			)
-
-			if err := utils.RunCmd(
-				app.Config.Transcoder.Timeout,
-				"ffmpeg",
-				"-y",
-				"-i", vf,
-				"-s", size,
-				"-c:v", "libx264",
-				"-c:a", "aac",
-				"-crf", "18",
-				"-strict", "-2",
-				"-loglevel", "quiet",
-				"-metadata", fmt.Sprintf("title=%s", videoInfo.Title),
-				"-metadata", fmt.Sprintf("comment=%s", videoInfo.Description),
-				sf,
-			); err != nil {
-				err := fmt.Errorf("error transcoding video: %w", err)
-				log.Error(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		fmt.Fprintf(w, "Video successfully imported!")
-	} else {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-	}
-}
 
 // HTTP handler for /v/id
+/*
 func (app *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -665,64 +308,7 @@ func (app *App) pageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	app.render("index", w, ctx)
 }
-
-// HTTP handler for /v/id.mp4
-func (app *App) videoHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	prefix, ok := vars["prefix"]
-	if ok {
-		id = path.Join(prefix, id)
-	}
-
-	log.Printf("/v/%s", id)
-
-	m, ok := app.Library.Videos[id]
-	if !ok {
-		return
-	}
-
-	var videoPath string
-
-	quality := strings.ToLower(r.URL.Query().Get("quality"))
-	switch quality {
-	case "720p", "480p", "360p", "240p":
-		videoPath = fmt.Sprintf(
-			"%s#%s.mp4",
-			strings.TrimSuffix(m.Path, filepath.Ext(m.Path)),
-			quality,
-		)
-		if !utils.FileExists(videoPath) {
-			log.
-				WithField("quality", quality).
-				WithField("videoPath", videoPath).
-				Warn("video with specified quality does not exist (defaulting to default quality)")
-			videoPath = m.Path
-		}
-	case "":
-		videoPath = m.Path
-	default:
-		log.WithField("quality", quality).Warn("invalid quality")
-		videoPath = m.Path
-	}
-
-	if err := app.Store.Migrate(prefix, id); err != nil {
-		err := fmt.Errorf("error migrating store data: %w", err)
-		log.Warn(err)
-	}
-
-	if err := app.Store.IncViews(id); err != nil {
-		err := fmt.Errorf("error updating view for %s: %w", id, err)
-		log.Warn(err)
-	}
-
-	title := m.Title
-	disposition := "attachment; filename=\"" + title + ".mp4\""
-	w.Header().Set("Content-Disposition", disposition)
-	w.Header().Set("Content-Type", "video/mp4")
-	http.ServeFile(w, r, videoPath)
-}
+*/
 
 // HTTP handler for /t/id
 func (app *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
@@ -779,14 +365,6 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-
-// func (app *App) panic(e error, w http.ResponseWriter) {
-// 	log.Error(e)
-// 	w.WriteHeader(http.StatusBadRequest)
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(models.ErrResponse{Error: e.Error()})
-// }
-
 // HTTP handler for /auth/login
 func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 	user := &models.User{}
@@ -821,6 +399,7 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 		return nil, fmt.Errorf("Invalid login credentials. Please try again")
 	}
 
+	// DO I NEED TO INCLUDE PASSWORD HERE? I THINK SO...
 	tk := &models.CustomClaims{
 		UserID: user.ID, 
 		Name: user.Name, 
@@ -842,12 +421,11 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 	return resp, nil
 }
 
+// MIDDLEWARE FOR AUTHENTICATION
 func (app *App) JwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
-
-		log.Info(header);
 
 		if header == "" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -870,6 +448,7 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 	})
 }
 
+// HTTP handler for /api/upload
 func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(app.Config.Server.MaxUploadSize)
 
@@ -970,9 +549,55 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
 	fmt.Fprintf(w, "Video successfully uploaded!")
-	
+}
+
+// HTTP handler for /v/id.mp4
+func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	log.Printf("/v/%s.mp4", id)
+
+	video := &models.Video {}
+	app.DataBase.First(video, id);
+
+	if (video.ID > 0) {
+		_, filename := path.Split(video.URL)
+		disposition := `attachment; filename="` + filename + `"`
+		w.Header().Set("Content-Disposition", disposition)
+		w.Header().Set("Content-Type", "video/mp4")
+		http.ServeFile(w, r, video.URL)
+		
+		defer app.incrementViews(video);
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Video not found"))
+	}
+}
+
+func (app *App) incrementViews(vid *models.Video) {
+	vid.Views++
+	app.DataBase.Save(&vid)
+}
+
+// HTTP handler for /v/id
+func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	log.Printf("/v/%s", id)
+
+	video := &models.Video {}
+	app.DataBase.First(video, id);
+
+	if (video.ID > 0) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(video)
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("Video not found"))
+	}
 }
 
 	// TODO: Make this a background job

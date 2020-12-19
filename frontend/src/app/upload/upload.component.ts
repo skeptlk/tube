@@ -1,7 +1,6 @@
 import { Component } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { AuthService } from '../services';
-import { VideoService } from '../services/videos.service';
+import { AuthService, VideoService } from '../services';
 
 @Component({
     selector: 'app-upload',
@@ -9,21 +8,21 @@ import { VideoService } from '../services/videos.service';
     styleUrls: ['./upload.component.scss']
 })
 export class UploadComponent {
-
+    
+    video: File = null;
     uploadForm = new FormGroup({
         title: new FormControl('', [Validators.required]),
         description: new FormControl('')
     })
 
-    video: File = null;
-
-    constructor(private vidService: VideoService, private auth: AuthService) { }
-
+    constructor(
+        private vidService: VideoService, 
+        private auth: AuthService
+    ) { }
 
     onFileSelected(files: FileList) {
-        if (files.length > 0) {
+        if (files.length > 0)
             this.video = files.item(0);
-        }
     }
 
     submit() {
@@ -34,8 +33,8 @@ export class UploadComponent {
         fd.append('userID', this.auth.currentUserValue.id?.toString());
         
         this.vidService.upload(fd)
-            .subscribe((resp) => console.log(resp) );
-
+            .subscribe((resp) => {
+                console.log(resp)
+            } );
     }
-
 }

@@ -1,0 +1,18 @@
+
+<!-- poster="/t/{{ $playing.ID}}" -->
+
+
+<div class="clr-row">
+    <div class="clr-col-9">
+        <video class="video" controls preload="metadata">
+            <source [src]="videoService.BASE_URL+'/v/'+id+'.mp4'" type="video/mp4"/>
+        </video>
+        <h2>{{ video.title }}</h2>
+        <p>{{ video.description }}</p>
+    </div>
+    <div class="clr-col-3">
+        <h3>Check out other cool vids:</h3>
+        <p>Nothing here yet...</p>
+    </div>
+</div>
+
