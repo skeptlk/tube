@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { VideoService } from '../services';
 import { Video } from '../models';
@@ -10,12 +10,13 @@ import { Video } from '../models';
 })
 export class VideoComponent implements OnInit {
 
-    video: Video = new Video({});
+    video: Video;
     id: number;
 
     constructor(
-        public videoService: VideoService, 
-        private route: ActivatedRoute) { }
+        public videoService: VideoService,
+        private route: ActivatedRoute
+    ) { }
 
     ngOnInit(): void {
         this.id = +this.route.snapshot.paramMap.get('id');

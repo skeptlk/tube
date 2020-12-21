@@ -24,6 +24,7 @@ type Video struct {
 	ID uint						`gorm:"primaryKey" json:"id"`
 
 	UserID uint					`json:"userId"`
+	User User					`json:"user"`
 	Title string				`json:"title"`
 	Description string			`json:"description"`
 	Duration int				`json:"duration"`

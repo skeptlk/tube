@@ -6,9 +6,10 @@
         </div>
         <div class="header-actions">
             <a *ngIf="auth.currentUserValue; else elseBlock"
-                routerLink="/account" class="nav-link nav-icon-text">
+                routerLink="/account" 
+                class="nav-link nav-icon-text">
                 <clr-icon shape="user"></clr-icon>
-                <span class="nav-text">Nonuser</span>
+                <span class="nav-text">{{ auth.currentUserValue.name }}</span>
             </a>
             <ng-template #elseBlock>
                 <a routerLink="/login" class="nav-link nav-icon-text">

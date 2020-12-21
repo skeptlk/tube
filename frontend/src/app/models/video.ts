@@ -1,3 +1,4 @@
+import { User } from "./user";
 
 export class Video {
     id: number;
@@ -10,6 +11,7 @@ export class Video {
     dislikes: number;
     url: string;
     thumbnail: string;
+    user: User;
 
     constructor(base: any) {
         this.id =           base['id'];
@@ -22,5 +24,6 @@ export class Video {
         this.dislikes =     base['dislikes'];
         this.url =          base['url'];
         this.thumbnail =    base['thumbnail'];
+        this.user = new User(base['user']);
     }
 }

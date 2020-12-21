@@ -21,10 +21,14 @@ export class AuthService {
 
     public login(data : { name: string, password: string }) {
         return this.http.post<any>(`http://localhost:8000/auth/login`, data)
-            .pipe(map(user => {
-                localStorage.setItem('currentUser', JSON.stringify(user));
-                this.currentUserSubject.next(user);
-                return user;
+            .pipe(map(resp => {
+                const user = resp.user;
+                if (user) {
+                    user.token = resp.token;
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                    this.currentUserSubject.next(user);
+                    return user;
+                }
             }));
     }
 

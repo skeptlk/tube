@@ -1,12 +1,23 @@
-
 <div class="clr-row">
-    <div class="clr-col-9">
+    <div class="clr-col-12">
         <h1>Welcome to the NonTube!</h1>
-        <p>
-            Lorem ipsum dolor sit amet, consectetur adipisicing elit. Impedit quae, qui ipsa laborum voluptatem aliquam nam culpa ea perferendis at, neque placeat tempore eveniet eius obcaecati nulla. Asperiores nam, recusandae obcaecati incidunt laborum reiciendis eligendi rem eius iusto dolorum dolore veniam quae error nostrum accusamus, aut hic perferendis quasi aspernatur eaque nulla ducimus praesentium assumenda. Ad atque soluta nisi? Corporis nulla quasi odit accusamus quae? Adipisci nostrum sunt eveniet dolor aliquid officia labore cupiditate maiores et! Optio iusto id vitae nemo molestias obcaecati blanditiis sint consequatur fugiat pariatur, rerum facilis nulla odio ut placeat porro? Itaque reprehenderit quam amet dicta.
-        </p>
+        <h4>Check out our best videos (special for you):</h4>
     </div>
-    <div class="clr-col-3">
-        <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Perferendis, dolore odio aut earum deserunt consequatur fuga, corporis aperiam animi officiis vel quo eligendi esse autem, commodi itaque ut tempore voluptas.</p>
+</div>
+
+<div class="clr-row video-list">
+    <div *ngFor="let vid of videos" class="clr-col-3 video-card">
+        <a [routerLink]="'/v/'+vid.id" class="card clickable">
+            <div class="card-img">
+                <img [src]="vidService.BASE_URL + '/' + vid.thumbnail" 
+                    [alt]="vid.title" />
+            </div>
+            <div class="card-block">
+                <p class="card-text">
+                    {{ vid.title }}
+                    <span class="label">{{ vid?.user.name }}</span>
+                </p>
+            </div>
+        </a>
     </div>
 </div>

@@ -101,11 +101,9 @@ func NewApp(cfg *Config) (*App, error) {
 	// Setup Router
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", app.indexHandler).Methods("GET", "OPTIONS")
-	// router.HandleFunc("/upload", app.uploadHandler).Methods("GET", "OPTIONS", "POST")
+	router.HandleFunc("/v/list", app.listVideosHandler).Methods("GET")
 	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
 	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
-	router.HandleFunc("/t/{id}", app.thumbHandler).Methods("GET")
-	router.HandleFunc("/t/{prefix}/{id}", app.thumbHandler).Methods("GET")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 	
 	router.HandleFunc("/auth/signup", app.apiCreateUserHandler).Methods("POST", "OPTIONS")
@@ -121,6 +119,13 @@ func NewApp(cfg *Config) (*App, error) {
 		http.FileServer(rice.MustFindBox("../static").HTTPBox()),
 	)
 	router.PathPrefix("/static/").Handler(fsHandler).Methods("GET")
+
+	// Static file handler
+	fsHandler2 := http.StripPrefix(
+		"/uploads",
+		http.FileServer(rice.MustFindBox("../uploads").HTTPBox()),
+	)
+	router.PathPrefix("/uploads/").Handler(fsHandler2).Methods("GET")
 
 	cors := handlers.CORS(
 		handlers.AllowedHeaders([]string{
@@ -226,113 +231,6 @@ func (app *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// HTTP handler for /v/id
-/*
-func (app *App) pageHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-	prefix, ok := vars["prefix"]
-	if ok {
-		id = path.Join(prefix, id)
-	}
-	log.Printf("/v/%s", id)
-	playing, ok := app.Library.Videos[id]
-	if !ok {
-		sort := strings.ToLower(r.URL.Query().Get("sort"))
-		quality := strings.ToLower(r.URL.Query().Get("quality"))
-		ctx := &struct {
-			Sort     string
-			Quality  string
-			Playing  *media.Video
-			Playlist media.Playlist
-		}{
-			Sort:     sort,
-			Quality:  quality,
-			Playing:  &media.Video{ID: ""},
-			Playlist: app.Library.Playlist(),
-		}
-		app.render("upload", w, ctx)
-		return
-	}
-
-	views, err := app.Store.GetViews(id)
-	if err != nil {
-		err := fmt.Errorf("error retrieving views for %s: %w", id, err)
-		log.Warn(err)
-	}
-
-	playing.Views = views
-
-	playlist := app.Library.Playlist()
-
-	// TODO: Optimize this? Bitcask has no concept of MultiGet / MGET
-	for _, video := range playlist {
-		views, err := app.Store.GetViews(video.ID)
-		if err != nil {
-			err := fmt.Errorf("error retrieving views for %s: %w", video.ID, err)
-			log.Warn(err)
-		}
-		video.Views = views
-	}
-
-	sort := strings.ToLower(r.URL.Query().Get("sort"))
-	switch sort {
-	case "views":
-		media.By(media.SortByViews).Sort(playlist)
-	case "", "timestamp":
-		media.By(media.SortByTimestamp).Sort(playlist)
-	default:
-		// By default the playlist is sorted by Timestamp
-		log.Warnf("invalid sort critiera: %s", sort)
-	}
-
-	quality := strings.ToLower(r.URL.Query().Get("quality"))
-	switch quality {
-	case "", "720p", "480p", "360p", "240p":
-	default:
-		log.WithField("quality", quality).Warn("invalid quality")
-		quality = ""
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	ctx := &struct {
-		Sort     string
-		Quality  string
-		Playing  *media.Video
-		Playlist media.Playlist
-	}{
-		Sort:     sort,
-		Quality:  quality,
-		Playing:  playing,
-		Playlist: playlist,
-	}
-	app.render("index", w, ctx)
-}
-*/
-
-// HTTP handler for /t/id
-func (app *App) thumbHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-	prefix, ok := vars["prefix"]
-	if ok {
-		id = path.Join(prefix, id)
-	}
-	log.Printf("/t/%s", id)
-	m, ok := app.Library.Videos[id]
-	if !ok {
-		return
-	}
-	w.Header().Set("Cache-Control", "public, max-age=7776000")
-	if m.ThumbType == "" {
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.Write(rice.MustFindBox("../static").MustBytes("defaulticon.jpg"))
-	} else {
-		w.Header().Set("Content-Type", m.ThumbType)
-		w.Write(m.Thumb)
-	}
-}
-
 // HTTP handler for /feed.xml
 func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=7776000")
@@ -367,6 +265,7 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 // HTTP handler for /auth/login
 func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("[POST] /auth/login");
 	user := &models.User{}
 	err := json.NewDecoder(r.Body).Decode(user) 
 	if err != nil {
@@ -374,11 +273,11 @@ func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
 		log.Error(err)
 		return;
 	}
+	
 	resp, err := app.findUser(user.Name, user.Password)
 	if err != nil {
 		http.Error(w, "Login failed", http.StatusBadRequest)
 		log.Error(err)
-		return
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -416,7 +315,7 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 	}
 
 	var resp = map[string] interface{} {"status": false, "message": "Logged in successfully!"}
-	resp["token"] = tokenString //Store the token in the response
+	resp["token"] = tokenString // Store the token in the response
 	resp["user"] = user
 	return resp, nil
 }
@@ -426,6 +325,8 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
+
+		log.Info(fmt.Sprintf("Token is %s", header))
 
 		if header == "" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -549,7 +450,17 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "Video successfully uploaded!")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(vid)
+	log.Info(fmt.Sprintf("Video successfully uploaded! Title: %s Id: %d", vid.Title, vid.ID))
+}
+
+func (app *App) listVideosHandler(w http.ResponseWriter, r *http.Request) {
+	var videos []models.Video
+	app.DataBase.Preload("User").Find(&videos)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(videos)
 }
 
 // HTTP handler for /v/id.mp4
@@ -560,16 +471,17 @@ func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("/v/%s.mp4", id)
 
 	video := &models.Video {}
-	app.DataBase.First(video, id);
+	app.DataBase.First(video, id)
 
 	if (video.ID > 0) {
+		// app.DataBase.First(video.User, video.UserID)
+
 		_, filename := path.Split(video.URL)
 		disposition := `attachment; filename="` + filename + `"`
 		w.Header().Set("Content-Disposition", disposition)
 		w.Header().Set("Content-Type", "video/mp4")
 		http.ServeFile(w, r, video.URL)
-		
-		defer app.incrementViews(video);
+		// defer app.incrementViews(video)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Video not found"))
