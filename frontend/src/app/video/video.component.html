@@ -5,6 +5,11 @@
         <video class="video" controls>
             <source [src]="videoService.BASE_URL+'/v/'+id+'.mp4'" type="video/mp4"/>
         </video>
+
+        <video-owner-controls *ngIf="showOwnerControls"
+            [video]="video">
+        </video-owner-controls>
+
         <h2>{{ video.title }}</h2>
         <p>{{ video.description }}</p>
     </div>

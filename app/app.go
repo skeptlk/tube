@@ -111,18 +111,17 @@ func NewApp(cfg *Config) (*App, error) {
 	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST", "OPTIONS")
 	
 	api := router.PathPrefix("/api").Subrouter()
-	api.Use(app.JwtVerify)
+	api.Use(app.jwtVerify)
+	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
 
-	// Static file handler
-	fsHandler := http.StripPrefix(
-		"/static",
-		http.FileServer(rice.MustFindBox("../static").HTTPBox()),
-	)
+	// Static assets handler
+	staticFs := http.FileServer(http.Dir("./static"))
 	router.PathPrefix("/static/").
-		   Handler(fsHandler).Methods("GET")
+		   Handler(http.StripPrefix("/static/", staticFs)).
+		   Methods("GET")
 
-	// Uploads handler
+	// Uploads static handler
 	uploadsFs := http.FileServer(http.Dir("./uploads"))
 	router.PathPrefix("/uploads/").
 		   Handler(http.StripPrefix("/uploads/", uploadsFs)).
@@ -135,11 +134,7 @@ func NewApp(cfg *Config) (*App, error) {
 			"Authorization",
 		}),
 		handlers.AllowedMethods([]string{
-			"GET",
-			"POST",
-			"PUT",
-			"HEAD",
-			"OPTIONS",
+			"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS",
 		}),
 		handlers.AllowedOrigins([]string{"*"}),
 		handlers.AllowCredentials(),
@@ -322,7 +317,7 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 }
 
 // MIDDLEWARE FOR AUTHENTICATION
-func (app *App) JwtVerify(next http.Handler) http.Handler {
+func (app *App) jwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
@@ -402,14 +397,12 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(vid)
-	log.Info(fmt.Sprintf("Video successfully uploaded! Title: %s Id: %d", vid.Title, vid.ID))
+	log.Info(fmt.Sprintf("New upload: Id=%d; Title: \"%s\"", vid.ID, vid.Title))
 
 	defer app.processVideo(vid, uniqueName, tempCopy);
 }
 
 func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *os.File) {
-	log.Info("Start processing video")
-
 	transcodeFile, err := ioutil.TempFile(
 		app.Config.Server.UploadPath,
 		fmt.Sprintf("tube-transcode-*.mp4"),
@@ -428,14 +421,15 @@ func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *o
 		"-metadata", fmt.Sprintf("comment=%s", video.Description),
 		transcodeFile.Name(),
 	); err != nil {
-		log.Error(fmt.Errorf("Error transcoding video: %w", err))
+		log.Error(err)
 		return
 	}
 
 	video.Duration, err = getVideoDuration(transcodeFile.Name())
+	app.DataBase.Save(&video)
 	if err != nil {
 		log.Error(err)
-		// return
+		return
 	}
 
 	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, 
@@ -451,35 +445,59 @@ func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *o
 		log.Error(err)
 		return
 	}
-
 	if err := os.Rename(transcodeFile.Name(), destVid); err != nil {
 		log.Error(err)
 		return
 	}
-
 	log.Info("Video processed!")
-
 	defer os.Remove(tempCopy.Name())
 }
 
 func getVideoDuration (filename string) (int, error) {
-	log.Info("Getting video duration.")
-
 	cmd := fmt.Sprintf("ffmpeg -i %s 2>&1 | grep Duration | awk '{print $2}'", filename)
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if (err != nil) {
 		return -1, err
 	}
-	out = append(out, 0)
-	log.Info("Video duration output:", string(out[:]))
-	tm, err := time.Parse("15:04:05", strings.Trim(string(out[:]), ","))
+	tmstr := strings.TrimSpace(string(out[:]));
+	tmstr = strings.Trim(tmstr, ",");
+
+	tm, err := time.Parse("15:04:05.00", tmstr)
 	dur := tm.Second()
-
-	log.Info(fmt.Sprintf("Got duration: %d", dur))
-
 	return dur, nil
 }
 
+func (app *App) apiDeleteVideoHandler (w http.ResponseWriter, r *http.Request) {
+	uid_ctx := r.Context().Value("userID")
+	uid := uid_ctx.(uint)
+
+	id := mux.Vars(r)["id"]
+	log.Info(fmt.Sprintf("Deleting a video; id=%s", id))
+
+	video := &models.Video {}
+	app.DataBase.Find(video, id);
+
+	if (video.UserID != uid) {
+		http.Error(w, "You are not the owner of this video", http.StatusForbidden)
+		log.Error("Deletion not permitted")
+		return
+	}
+
+	if err := os.Remove(video.URL); err != nil {
+		http.Error(w, "Error", http.StatusInternalServerError)
+		log.Error(err)
+		return	
+	}
+	if err := os.Remove(video.ThumbnailURL); err != nil {
+		http.Error(w, "Error", http.StatusInternalServerError)
+		log.Error(err)
+		return	
+	}
+
+	app.DataBase.Delete(&video)
+}
+
+// HTTP handler for /v/list
 func (app *App) listVideosHandler(w http.ResponseWriter, r *http.Request) {
 	var videos []models.Video
 	app.DataBase.Preload("User").Find(&videos)

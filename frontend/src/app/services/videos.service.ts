@@ -14,6 +14,10 @@ export class VideoService {
         return this.http.post<any>(this.BASE_URL + `/api/video`, data).pipe();
     }
 
+    public delete(id: number) {
+        return this.http.delete(this.BASE_URL + '/api/video/' + id).pipe();
+    }
+
     public list() {
         return this.http
             .get<any>(this.BASE_URL + `/v/list`)
