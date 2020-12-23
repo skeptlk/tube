@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -118,14 +119,14 @@ func NewApp(cfg *Config) (*App, error) {
 		"/static",
 		http.FileServer(rice.MustFindBox("../static").HTTPBox()),
 	)
-	router.PathPrefix("/static/").Handler(fsHandler).Methods("GET")
+	router.PathPrefix("/static/").
+		   Handler(fsHandler).Methods("GET")
 
-	// Static file handler
-	fsHandler2 := http.StripPrefix(
-		"/uploads",
-		http.FileServer(rice.MustFindBox("../uploads").HTTPBox()),
-	)
-	router.PathPrefix("/uploads/").Handler(fsHandler2).Methods("GET")
+	// Uploads handler
+	uploadsFs := http.FileServer(http.Dir("./uploads"))
+	router.PathPrefix("/uploads/").
+		   Handler(http.StripPrefix("/uploads/", uploadsFs)).
+		   Methods("GET")
 
 	cors := handlers.CORS(
 		handlers.AllowedHeaders([]string{
@@ -353,6 +354,7 @@ func (app *App) JwtVerify(next http.Handler) http.Handler {
 func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(app.Config.Server.MaxUploadSize)
 
+	// GET VIDEO FROM REQUEST
 	file, handler, err := r.FormFile("video")
 	if err != nil {
 		log.Error(err)
@@ -363,7 +365,6 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// CREATE VIDEO OBJECT
 	vid := &models.Video {}
-
 	vid.Title = r.FormValue("title")
 	vid.Description = r.FormValue("description")
 	uid_ctx := r.Context().Value("userID")
@@ -379,7 +380,6 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		log.Error(err, w)
 		return
 	}
-	defer os.Remove(tempCopy.Name())
 
 	_, err = io.Copy(tempCopy, file)
 	if err != nil {
@@ -388,60 +388,10 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transcodeFile, err := ioutil.TempFile(
-		app.Config.Server.UploadPath,
-		fmt.Sprintf("tube-transcode-*.mp4"),
-	)
-	log.Info(fmt.Sprintf("Transcode file name: %s", transcodeFile.Name()))
-	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		log.Error(err, w)
-		return
-	}
-
-	// CREATE THUMBNAIL
-	uniqueName := fmt.Sprintf("%s.mp4", shortuuid.New())
-	destVid := filepath.Join(app.Config.Server.UploadPath, uniqueName)
-	tempThumb := fmt.Sprintf("%s.jpg", strings.TrimSuffix(transcodeFile.Name(), ".mp4"))
-	destThumb := fmt.Sprintf("%s.jpg", strings.TrimSuffix(destVid, filepath.Ext(destVid)))
-
-	vid.URL = destVid;
-	vid.ThumbnailURL = destThumb;
-
-	if err := utils.RunCmd(
-		app.Config.Transcoder.Timeout,
-		"ffmpeg", "-y", "-i", tempCopy.Name(),
-		"-vcodec", "h264", "-acodec", "aac",
-		"-strict", "-2", "-loglevel", "quiet",
-		"-metadata", fmt.Sprintf("title=%s", vid.Title),
-		"-metadata", fmt.Sprintf("comment=%s", vid.Description),
-		transcodeFile.Name(),
-	); err != nil {
-		log.Error(fmt.Errorf("Error transcoding video: %w", err))
-		http.Error(w, "Can't process this file", http.StatusInternalServerError)
-		return
-	}
-
-	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, 
-		"mt", "-b", "-s", "-n", "1", 
-		transcodeFile.Name()); 
-	if err != nil {
-		log.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.Rename(tempThumb, destThumb); err != nil {
-		log.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.Rename(transcodeFile.Name(), destVid); err != nil {
-		log.Error(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// GENERATE RANDOM IDNTIFIER
+	uniqueName := shortuuid.New()
+	vid.URL 		 = filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.mp4", uniqueName))
+	vid.ThumbnailURL = filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.jpg", uniqueName))
 
 	res := app.DataBase.Create(&vid)
 	if res.Error != nil {
@@ -453,6 +403,81 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(vid)
 	log.Info(fmt.Sprintf("Video successfully uploaded! Title: %s Id: %d", vid.Title, vid.ID))
+
+	defer app.processVideo(vid, uniqueName, tempCopy);
+}
+
+func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *os.File) {
+	log.Info("Start processing video")
+
+	transcodeFile, err := ioutil.TempFile(
+		app.Config.Server.UploadPath,
+		fmt.Sprintf("tube-transcode-*.mp4"),
+	)
+	tempThumb := fmt.Sprintf("%s.jpg", strings.TrimSuffix(transcodeFile.Name(), ".mp4"))
+	destThumb := filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.jpg", uniqueName))
+	destVid := filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.mp4", uniqueName))
+
+	if err := utils.RunCmd(
+		app.Config.Transcoder.Timeout,
+		"ffmpeg", "-y", "-i", 
+		tempCopy.Name(),
+		"-vcodec", "h264", "-acodec", "aac",
+		"-strict", "-2", "-loglevel", "quiet",
+		"-metadata", fmt.Sprintf("title=%s", video.Title),
+		"-metadata", fmt.Sprintf("comment=%s", video.Description),
+		transcodeFile.Name(),
+	); err != nil {
+		log.Error(fmt.Errorf("Error transcoding video: %w", err))
+		return
+	}
+
+	video.Duration, err = getVideoDuration(transcodeFile.Name())
+	if err != nil {
+		log.Error(err)
+		// return
+	}
+
+	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, 
+		"mt", "-b", "-s", "-n", "1", 
+		transcodeFile.Name(),
+	); 
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if err := os.Rename(tempThumb, destThumb); err != nil {
+		log.Error(err)
+		return
+	}
+
+	if err := os.Rename(transcodeFile.Name(), destVid); err != nil {
+		log.Error(err)
+		return
+	}
+
+	log.Info("Video processed!")
+
+	defer os.Remove(tempCopy.Name())
+}
+
+func getVideoDuration (filename string) (int, error) {
+	log.Info("Getting video duration.")
+
+	cmd := fmt.Sprintf("ffmpeg -i %s 2>&1 | grep Duration | awk '{print $2}'", filename)
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if (err != nil) {
+		return -1, err
+	}
+	out = append(out, 0)
+	log.Info("Video duration output:", string(out[:]))
+	tm, err := time.Parse("15:04:05", strings.Trim(string(out[:]), ","))
+	dur := tm.Second()
+
+	log.Info(fmt.Sprintf("Got duration: %d", dur))
+
+	return dur, nil
 }
 
 func (app *App) listVideosHandler(w http.ResponseWriter, r *http.Request) {
@@ -474,14 +499,12 @@ func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
 	app.DataBase.First(video, id)
 
 	if (video.ID > 0) {
-		// app.DataBase.First(video.User, video.UserID)
-
 		_, filename := path.Split(video.URL)
 		disposition := `attachment; filename="` + filename + `"`
 		w.Header().Set("Content-Disposition", disposition)
 		w.Header().Set("Content-Type", "video/mp4")
 		http.ServeFile(w, r, video.URL)
-		// defer app.incrementViews(video)
+		defer app.incrementViews(video)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Video not found"))
@@ -504,6 +527,8 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 	app.DataBase.First(video, id);
 
 	if (video.ID > 0) {
+		app.DataBase.First(&video.User, video.UserID)
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(video)
 	} else {
