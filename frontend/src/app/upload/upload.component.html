@@ -11,9 +11,25 @@
                         <label>Description</label>
                         <input clrInput type="text" formControlName="description" name="description" />
                     </clr-input-container>
-                    <div>
-                        <label>Video file</label>
-                        <input type="file" (change)="onFileSelected($event.target.files)"/>
+                    <input type="file" #fileInp 
+                        (change)="onFileSelected($event.target.files)"
+                        class="not-visible"/>
+
+                    <div class="dragzone" 
+                        *ngIf="!video"
+                        [ngClass]="{ active: dragActive }" 
+                        (dragover)="dragActive = true" 
+                        (dragleave)="dragActive = false"
+                        (drop)="dropHandler($event)"
+                        (click)="selectFile()">
+                        <clr-icon shape="video-gallery"></clr-icon>
+                        <h4>Select your file or drop it here</h4>
+                    </div>
+                    <div *ngIf="video">
+                        <span class="selected-file">
+                            {{ video?.name }}
+                            <clr-icon shape="video-gallery"></clr-icon>
+                        </span>
                     </div>
                 </form>
             </div>
