@@ -36,3 +36,5 @@ CREATE TABLE `likes` (
     `v_id` int NOT NULL,
     `is_dislike` int NOT NULL DEFAULT 0
 )
+
+ALTER TABLE likes ADD CONSTRAINT fk_video_id FOREIGN KEY (v_id) REFERENCES videos(id) ON DELETE CASCADE;

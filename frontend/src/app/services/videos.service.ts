@@ -35,20 +35,35 @@ export class VideoService {
             .pipe(map(resp => new Video(resp)))
     }
 
-    public like() {
-
+    // liked or disliked or none
+    public likeInfo(id: number) {
+        return this.http
+            .get<any>(this.BASE_URL + `/api/like/` + id)
+            .pipe()
     }
 
-    public removeLike() {
-
+    public like(id: number) {
+        return this.http
+            .post<any>(this.BASE_URL + `/api/like/` + id, {})
+            .pipe()
     }
 
-    public dislike() {
-
+    public removeLike(id: number) {
+        return this.http
+            .delete<any>(this.BASE_URL + `/api/like/` + id)
+            .pipe()
     }
 
-    public removeDislike() {
-        
+    public dislike(id: number) {
+        return this.http
+            .post<any>(this.BASE_URL + `/api/dislike/` + id, {})
+            .pipe()
+    }
+
+    public removeDislike(id: number) {
+        return this.http
+            .delete<any>(this.BASE_URL + `/api/dislike/` + id)
+            .pipe()
     }
 
 }

@@ -83,7 +83,7 @@ func NewApp(cfg *Config) (*App, error) {
 
 	app.Templates = newTemplateStore("base")
 
-	templateFuncs := map[string]interface{}{
+	templateFuncs := map[string]interface {} {
 		"bytes": func(size int64) string { return humanize.Bytes(uint64(size)) },
 	}
 
@@ -112,7 +112,9 @@ func NewApp(cfg *Config) (*App, error) {
 	api.Use(app.jwtVerify)
 	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
-	api.HandleFunc("/like", app.apiLikeHandler).Methods("POST", "PUT", "DELETE", "OPTIONS")
+	api.HandleFunc("/like/{id}", app.apiLikeHandler).Methods("POST", "DELETE", "OPTIONS")
+	api.HandleFunc("/like/{id}", app.apiCheckLiked).Methods("GET")
+	api.HandleFunc("/dislike/{id}", app.apiDislikeHandler).Methods("POST", "DELETE", "OPTIONS")
 
 	// Static assets handler
 	staticFs := http.FileServer(http.Dir("./static"))
@@ -518,7 +520,6 @@ func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", disposition)
 		w.Header().Set("Content-Type", "video/mp4")
 		http.ServeFile(w, r, video.URL)
-		defer app.incrementViews(video)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Video not found"))
@@ -526,6 +527,7 @@ func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) incrementViews(vid *models.Video) {
+	log.Info("Incrementing views")
 	vid.Views++
 	app.DataBase.Save(&vid)
 }
@@ -549,81 +551,127 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Video not found"))
 	}
+	
+	defer app.incrementViews(video)
 }
 
 func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
-	like := &models.Like{}
-	err := json.NewDecoder(r.Body).Decode(like)
-	if err != nil {
-		http.Error(w, "Cannot decode like", http.StatusBadRequest)
-		log.Info(err)
-		return
-	}
+	vID := mux.Vars(r)["id"]
+	uidCtx := r.Context().Value("userID")
 
-	uid_ctx := r.Context().Value("userID")
-	uid := uid_ctx.(uint)
-	if uid != like.UID {
-		http.Error(w, "Not authorized", http.StatusUnauthorized)
-		log.Info("Not authorized")
-		return
-	}
+	like := &models.Like {}
+	app.DataBase.Table("likes").Where("uid = ? AND v_id = ?", uidCtx, vID).First(like)
 
-	vid := &models.Video{}
-	app.DataBase.First(vid, like.VID)
-
-	if vid.ID <= 0 {
+	video := &models.Video{}
+	app.DataBase.First(video, vID)
+	if video.ID <= 0 {
 		http.Error(w, "Video not found", http.StatusNotFound)
 		log.Info("Video not found")
 		return
 	}
 
-	if r.Method == http.MethodPost { // CREATE NEW LIKE
-		// CHECK THAT LIKE DOES NOT EXISTS
-		_l := &models.Like{}
-		res := app.DataBase.Where("uid = ? AND v_id = ?", like.UID, like.VID).First(_l)
-		if res.Error != nil || _l.ID > 0 || like.UID <= 0 || like.VID <= 0 {
+	if r.Method == http.MethodPost {
+		// IF LIKE FOUND AND IT IS DISLIKE 
+		if like.ID > 0 && like.IsDislike {
+			// change to like and save
+			like.IsDislike = false
+			video.Dislikes--
+			video.Likes++
+			app.DataBase.Save(like)
+			app.DataBase.Save(video)
+		} else if like.ID > 0 && !like.IsDislike {
+			// already exits
+		} else {
+			// new like
+			video.Likes++
+			like.UID = uidCtx.(uint)
+			like.VID = video.ID
+			app.DataBase.Save(like)
+			app.DataBase.Save(video)
+		}
+	} else if r.Method == http.MethodDelete {
+		// IF LIKE FOUND AND IT IS NOT DISLIKE
+		if (like.ID > 0 && like.IsDislike == false) {
+			video.Likes--
+			app.DataBase.Delete(like)
+			app.DataBase.Save(video)
+		} else {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			log.Info("Bad request")
-			return
 		}
+	}
+}
 
-		if like.IsDislike {
-			vid.Dislikes++
-		} else {
-			vid.Likes++
-		}
-		app.DataBase.Save(vid)
-		app.DataBase.Save(like)
-	} else if r.Method == http.MethodPut { // UPDATE LIKE (e.g. change to dislike)
-		// CHECK IF LIKE EXISTS
-		_l := &models.Like{}
-		app.DataBase.Where("uid = ? AND v_id = ?", like.UID, like.VID).First(_l)
-		if _l.ID <= 0 {
-			http.Error(w, "Not found", http.StatusNotFound)
-			log.Info("Not found")
-			return
-		}
-		like.ID = _l.ID
-		if like.IsDislike && !_l.IsDislike {
-			vid.Dislikes++
-			vid.Likes--
-		} else if !like.IsDislike && _l.IsDislike {
-			vid.Dislikes--
-			vid.Likes++
-		}
+func (app *App) apiCheckLiked(w http.ResponseWriter, r *http.Request) {
+	vID := mux.Vars(r)["id"]
+	uidCtx := r.Context().Value("userID")
 
-		app.DataBase.Save(like)
-		app.DataBase.Save(vid)
-	} else if r.Method == http.MethodDelete { // DELETE LIKE
-		app.DataBase.Delete(like)
-		if (like.IsDislike) {
-			vid.Dislikes--
-		} else {
-			vid.Likes--
-		}
-		app.DataBase.Save(vid)
+	like := &models.Like {}
+	app.DataBase.Table("likes").Where("uid = ? AND v_id = ?", uidCtx, vID).First(like)
+
+	video := &models.Video{}
+	app.DataBase.First(video, vID)
+	if video.ID <= 0 {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		log.Info("Video not found")
+		return
 	}
 
+	resp := map[string]bool {
+		"liked": (like.ID > 0 && !like.IsDislike), 
+		"disliked": (like.ID > 0 && like.IsDislike),
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+
+
+func (app *App) apiDislikeHandler (w http.ResponseWriter, r *http.Request) {
+	vID := mux.Vars(r)["id"]
+	uidCtx := r.Context().Value("userID")
+
+	like := &models.Like {}
+	app.DataBase.Table("likes").Where("uid = ? AND v_id = ?", uidCtx, vID).First(like)
+
+	video := &models.Video{}
+	app.DataBase.First(video, vID)
+	if video.ID <= 0 {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		log.Info("Video not found")
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		// IF LIKE FOUND AND IT IS NOT DISLIKE 
+		if like.ID > 0 && like.IsDislike == false {
+			// change to like and save
+			like.IsDislike = false
+			video.Dislikes++
+			video.Likes--
+			app.DataBase.Save(like)
+			app.DataBase.Save(video)
+		} else if like.ID > 0 && like.IsDislike {
+			// already exits
+		} else {
+			// new dislike
+			video.Dislikes++
+			like.IsDislike = true
+			like.UID = uidCtx.(uint)
+			like.VID = video.ID
+			app.DataBase.Save(like)
+			app.DataBase.Save(video)
+		}
+	} else if r.Method == http.MethodDelete {
+		// IF LIKE FOUND AND IT IS DISLIKE
+		if (like.ID > 0 && like.IsDislike) {
+			video.Dislikes--
+			app.DataBase.Delete(like)
+			app.DataBase.Save(video)
+		} else {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			log.Info("Bad request")
+		}
+	}
 }
 
 // TODO: Make this a background job

@@ -12,9 +12,7 @@ export class Video {
     dislikes: number;
     url: string;
     thumbnail: string;
-    isLiked: boolean;
-    isDisliked: boolean;
-
+    
     constructor(base: any) {
         this.id =           base['id'];
         this.user = new User(base['user']);
@@ -27,7 +25,5 @@ export class Video {
         this.dislikes =     base['dislikes'];
         this.url =          base['url'];
         this.thumbnail =    base['thumbnail'];
-        this.isLiked =      base['isLiked']
-        this.isDisliked =   base['isDisliked']
     }
 }

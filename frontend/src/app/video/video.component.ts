@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { AuthService, VideoService } from '../services';
 import { Video } from '../models';
@@ -13,6 +13,8 @@ export class VideoComponent implements OnInit {
     video: Video;
     id: number;
     showOwnerControls: boolean;
+    isLiked: boolean;
+    isDisliked: boolean;
 
     constructor(
         public videoService: VideoService,
@@ -22,43 +24,46 @@ export class VideoComponent implements OnInit {
 
     ngOnInit(): void {
         this.id = +this.route.snapshot.paramMap.get('id');
-        this.videoService
-            .getInfo(this.id)
+        this.videoService.getInfo(this.id)
             .subscribe(vid => {
                 this.video = vid;
                 this.showOwnerControls = (vid.userId === this.auth.currentUserValue.id);
-            });
+            })
+        this.videoService.likeInfo(this.id)
+            .subscribe(resp => {
+                this.isLiked = resp.liked;
+                this.isDisliked = resp.disliked;
+            })
     }
 
     toggleLike() {
-        if (this.video.isLiked) {
-            this.videoService.removeLike();
-            this.video.isLiked = false;
+        if (this.isLiked) {
+            this.videoService.removeLike(this.video.id).toPromise();
+            this.isLiked = false;
             this.video.likes--;
         } else {
-            this.videoService.like();
+            this.videoService.like(this.video.id).toPromise();
             this.video.likes++;
-            this.video.isLiked = true;
-            if (this.video.isDisliked) {
+            this.isLiked = true;
+            if (this.isDisliked) {
                 this.video.dislikes--;
-                this.video.isDisliked = false;
+                this.isDisliked = false;
             }
         }
-        
     }
 
     toggleDislike() {
-        if (this.video.isDisliked) {
-            this.videoService.removeDislike();
-            this.video.isDisliked = false;
+        if (this.isDisliked) {
+            this.videoService.removeDislike(this.video.id).toPromise();
+            this.isDisliked = false;
             this.video.dislikes--;
         } else {
-            this.videoService.dislike();
-            this.video.dislikes++;
-            this.video.isDisliked = true;
-            if (this.video.isLiked) {
+            this.videoService.dislike(this.video.id).toPromise();
+            this.video.dislikes++
+            this.isDisliked = true;
+            if (this.isLiked) {
                 this.video.likes--;
-                this.video.isLiked = false;
+                this.isLiked = false;
             }
         }
     }

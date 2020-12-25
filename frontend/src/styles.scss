@@ -7,6 +7,13 @@
     display: block;
 }
 
+.not-visible {
+    position: fixed;
+    visibility: 0;
+    right: -1000px;
+    bottom: 1000px;
+}
+
 button {
     outline: none !important;
 }
