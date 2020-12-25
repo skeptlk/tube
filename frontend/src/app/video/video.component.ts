@@ -30,4 +30,37 @@ export class VideoComponent implements OnInit {
             });
     }
 
+    toggleLike() {
+        if (this.video.isLiked) {
+            this.videoService.removeLike();
+            this.video.isLiked = false;
+            this.video.likes--;
+        } else {
+            this.videoService.like();
+            this.video.likes++;
+            this.video.isLiked = true;
+            if (this.video.isDisliked) {
+                this.video.dislikes--;
+                this.video.isDisliked = false;
+            }
+        }
+        
+    }
+
+    toggleDislike() {
+        if (this.video.isDisliked) {
+            this.videoService.removeDislike();
+            this.video.isDisliked = false;
+            this.video.dislikes--;
+        } else {
+            this.videoService.dislike();
+            this.video.dislikes++;
+            this.video.isDisliked = true;
+            if (this.video.isLiked) {
+                this.video.likes--;
+                this.video.isLiked = false;
+            }
+        }
+    }
+
 }

@@ -6,9 +6,28 @@
             <source [src]="videoService.BASE_URL+'/v/'+id+'.mp4'" type="video/mp4"/>
         </video>
 
-        <video-owner-controls *ngIf="showOwnerControls"
-            [video]="video">
-        </video-owner-controls>
+        <div>
+            <span>{{ video.views }} views</span>
+            <video-owner-controls *ngIf="showOwnerControls"
+                class="controls"
+                [video]="video">
+            </video-owner-controls>
+            <div class="likes">
+                <button class="btn btn-link"
+                    [ngClass]="{ pressed: video.isLiked }"
+                    (click)="toggleLike()">
+                    <clr-icon shape="thumbs-up"></clr-icon>
+                    {{ video.likes }}
+                </button>
+                <button class="btn btn-link"
+                    [ngClass]="{ pressed: video.isDisliked }"
+                    (click)="toggleDislike()">
+                    {{ video.dislikes }}
+                    <clr-icon shape="thumbs-down"></clr-icon>
+                </button>
+            </div>
+        </div>
+
 
         <h2>{{ video.title }}</h2>
         <p>{{ video.description }}</p>

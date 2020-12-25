@@ -37,6 +37,18 @@ type Video struct {
 	CreatedAt time.Time			`json:"-"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
+
+	// not included in db
+	IsLiked bool 				`gorm:"-" json:"isLiked"`
+	IsDisliked bool 			`gorm:"-" json:"isDisliked"`
+}
+
+// Like model
+type Like struct {
+	ID uint				`gorm:"primaryKey" json:"id,string,omitempty"`
+	UID uint			`json:"userId,string"`
+	VID uint			`json:"videoId,string"`
+	IsDislike bool		`json:"isDislike,string"`
 }
 
 // ErrResponse - Error response

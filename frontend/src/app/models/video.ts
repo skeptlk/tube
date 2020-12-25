@@ -3,6 +3,7 @@ import { User } from "./user";
 export class Video {
     id: number;
     userId: number;
+    user: User;
     title: string;
     description: string;
     duration: number;
@@ -11,10 +12,12 @@ export class Video {
     dislikes: number;
     url: string;
     thumbnail: string;
-    user: User;
+    isLiked: boolean;
+    isDisliked: boolean;
 
     constructor(base: any) {
         this.id =           base['id'];
+        this.user = new User(base['user']);
         this.userId =       base['userId'];
         this.title =        base['title'];
         this.description =  base['description'];
@@ -24,6 +27,7 @@ export class Video {
         this.dislikes =     base['dislikes'];
         this.url =          base['url'];
         this.thumbnail =    base['thumbnail'];
-        this.user = new User(base['user']);
+        this.isLiked =      base['isLiked']
+        this.isDisliked =   base['isDisliked']
     }
 }

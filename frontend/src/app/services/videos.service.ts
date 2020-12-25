@@ -35,5 +35,21 @@ export class VideoService {
             .pipe(map(resp => new Video(resp)))
     }
 
+    public like() {
+
+    }
+
+    public removeLike() {
+
+    }
+
+    public dislike() {
+
+    }
+
+    public removeDislike() {
+        
+    }
+
 }
 

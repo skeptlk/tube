@@ -48,14 +48,12 @@ type App struct {
 	DataBase  *gorm.DB
 }
 
-
-
 // NewApp returns a new instance of App from Config.
 func NewApp(cfg *Config) (*App, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-	app := &App {
+	app := &App{
 		Config: cfg,
 	}
 	// Setup Library
@@ -106,26 +104,27 @@ func NewApp(cfg *Config) (*App, error) {
 	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
 	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
-	
+
 	router.HandleFunc("/auth/signup", app.apiCreateUserHandler).Methods("POST", "OPTIONS")
 	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST", "OPTIONS")
-	
+
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(app.jwtVerify)
 	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
+	api.HandleFunc("/like", app.apiLikeHandler).Methods("POST", "PUT", "DELETE", "OPTIONS")
 
 	// Static assets handler
 	staticFs := http.FileServer(http.Dir("./static"))
 	router.PathPrefix("/static/").
-		   Handler(http.StripPrefix("/static/", staticFs)).
-		   Methods("GET")
+		Handler(http.StripPrefix("/static/", staticFs)).
+		Methods("GET")
 
 	// Uploads static handler
 	uploadsFs := http.FileServer(http.Dir("./uploads"))
 	router.PathPrefix("/uploads/").
-		   Handler(http.StripPrefix("/uploads/", uploadsFs)).
-		   Methods("GET")
+		Handler(http.StripPrefix("/uploads/", uploadsFs)).
+		Methods("GET")
 
 	cors := handlers.CORS(
 		handlers.AllowedHeaders([]string{
@@ -155,14 +154,14 @@ func ConnectDB() (*gorm.DB, error) {
 // Run imports the library and starts server.
 func (app *App) Run() error {
 	var err error
-	
-	app.DataBase, err = ConnectDB();
+
+	app.DataBase, err = ConnectDB()
 	if err != nil {
 		return err
 	}
 
 	for _, pc := range app.Config.Library {
-		p := &media.Path {
+		p := &media.Path{
 			Path:   pc.Path,
 			Prefix: pc.Prefix,
 		}
@@ -226,7 +225,6 @@ func (app *App) indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 // HTTP handler for /feed.xml
 func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=7776000")
@@ -236,7 +234,7 @@ func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
 
 // HTTP handler for /auth/signup
 func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
-	user := &models.User {}
+	user := &models.User{}
 	json.NewDecoder(r.Body).Decode(user)
 
 	pass, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
@@ -261,15 +259,15 @@ func (app *App) apiCreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 // HTTP handler for /auth/login
 func (app *App) loginHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("[POST] /auth/login");
+	log.Info("[POST] /auth/login")
 	user := &models.User{}
-	err := json.NewDecoder(r.Body).Decode(user) 
+	err := json.NewDecoder(r.Body).Decode(user)
 	if err != nil {
 		http.Error(w, "Login failed", http.StatusBadRequest)
 		log.Error(err)
-		return;
+		return
 	}
-	
+
 	resp, err := app.findUser(user.Name, user.Password)
 	if err != nil {
 		http.Error(w, "Login failed", http.StatusBadRequest)
@@ -286,19 +284,19 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 	if err != nil {
 		return nil, fmt.Errorf("User name not found")
 	}
-	
+
 	expiresAt := time.Now().Add(time.Minute * 100000).Unix()
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	// Password does not match!
-	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword { 
+	if err != nil && err == bcrypt.ErrMismatchedHashAndPassword {
 		return nil, fmt.Errorf("Invalid login credentials. Please try again")
 	}
 
 	// DO I NEED TO INCLUDE PASSWORD HERE? I THINK SO...
 	tk := &models.CustomClaims{
-		UserID: user.ID, 
-		Name: user.Name, 
-		Email: user.Email,
+		UserID: user.ID,
+		Name:   user.Name,
+		Email:  user.Email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expiresAt,
 		},
@@ -310,7 +308,7 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 		fmt.Println(error)
 	}
 
-	var resp = map[string] interface{} {"status": false, "message": "Logged in successfully!"}
+	var resp = map[string]interface{}{"status": false, "message": "Logged in successfully!"}
 	resp["token"] = tokenString // Store the token in the response
 	resp["user"] = user
 	return resp, nil
@@ -321,8 +319,6 @@ func (app *App) jwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
-
-		log.Info(fmt.Sprintf("Token is %s", header))
 
 		if header == "" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -359,13 +355,13 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// CREATE VIDEO OBJECT
-	vid := &models.Video {}
+	vid := &models.Video{}
 	vid.Title = r.FormValue("title")
 	vid.Description = r.FormValue("description")
 	uid_ctx := r.Context().Value("userID")
 	vid.UserID = uid_ctx.(uint)
 
-	// CREATE TEMP COPY OF VIDEO 
+	// CREATE TEMP COPY OF VIDEO
 	tempCopy, err := ioutil.TempFile(
 		app.Config.Server.UploadPath,
 		fmt.Sprintf("tube-upload-*%s", filepath.Ext(handler.Filename)),
@@ -385,7 +381,7 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// GENERATE RANDOM IDNTIFIER
 	uniqueName := shortuuid.New()
-	vid.URL 		 = filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.mp4", uniqueName))
+	vid.URL = filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.mp4", uniqueName))
 	vid.ThumbnailURL = filepath.Join(app.Config.Server.UploadPath, fmt.Sprintf("%s.jpg", uniqueName))
 
 	res := app.DataBase.Create(&vid)
@@ -399,7 +395,7 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(vid)
 	log.Info(fmt.Sprintf("New upload: Id=%d; Title: \"%s\"", vid.ID, vid.Title))
 
-	defer app.processVideo(vid, uniqueName, tempCopy);
+	defer app.processVideo(vid, uniqueName, tempCopy)
 }
 
 func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *os.File) {
@@ -413,7 +409,7 @@ func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *o
 
 	if err := utils.RunCmd(
 		app.Config.Transcoder.Timeout,
-		"ffmpeg", "-y", "-i", 
+		"ffmpeg", "-y", "-i",
 		tempCopy.Name(),
 		"-vcodec", "h264", "-acodec", "aac",
 		"-strict", "-2", "-loglevel", "quiet",
@@ -432,10 +428,10 @@ func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *o
 		return
 	}
 
-	err = utils.RunCmd(app.Config.Thumbnailer.Timeout, 
-		"mt", "-b", "-s", "-n", "1", 
+	err = utils.RunCmd(app.Config.Thumbnailer.Timeout,
+		"mt", "-b", "-s", "-n", "1",
 		transcodeFile.Name(),
-	); 
+	)
 	if err != nil {
 		log.Error(err)
 		return
@@ -453,31 +449,31 @@ func (app *App) processVideo(video *models.Video, uniqueName string, tempCopy *o
 	defer os.Remove(tempCopy.Name())
 }
 
-func getVideoDuration (filename string) (int, error) {
+func getVideoDuration(filename string) (int, error) {
 	cmd := fmt.Sprintf("ffmpeg -i %s 2>&1 | grep Duration | awk '{print $2}'", filename)
 	out, err := exec.Command("bash", "-c", cmd).Output()
-	if (err != nil) {
+	if err != nil {
 		return -1, err
 	}
-	tmstr := strings.TrimSpace(string(out[:]));
-	tmstr = strings.Trim(tmstr, ",");
+	tmstr := strings.TrimSpace(string(out[:]))
+	tmstr = strings.Trim(tmstr, ",")
 
 	tm, err := time.Parse("15:04:05.00", tmstr)
 	dur := tm.Second()
 	return dur, nil
 }
 
-func (app *App) apiDeleteVideoHandler (w http.ResponseWriter, r *http.Request) {
+func (app *App) apiDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 	uid_ctx := r.Context().Value("userID")
 	uid := uid_ctx.(uint)
 
 	id := mux.Vars(r)["id"]
 	log.Info(fmt.Sprintf("Deleting a video; id=%s", id))
 
-	video := &models.Video {}
-	app.DataBase.Find(video, id);
+	video := &models.Video{}
+	app.DataBase.Find(video, id)
 
-	if (video.UserID != uid) {
+	if video.UserID != uid {
 		http.Error(w, "You are not the owner of this video", http.StatusForbidden)
 		log.Error("Deletion not permitted")
 		return
@@ -486,12 +482,12 @@ func (app *App) apiDeleteVideoHandler (w http.ResponseWriter, r *http.Request) {
 	if err := os.Remove(video.URL); err != nil {
 		http.Error(w, "Error", http.StatusInternalServerError)
 		log.Error(err)
-		return	
+		return
 	}
 	if err := os.Remove(video.ThumbnailURL); err != nil {
 		http.Error(w, "Error", http.StatusInternalServerError)
 		log.Error(err)
-		return	
+		return
 	}
 
 	app.DataBase.Delete(&video)
@@ -513,10 +509,10 @@ func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("/v/%s.mp4", id)
 
-	video := &models.Video {}
+	video := &models.Video{}
 	app.DataBase.First(video, id)
 
-	if (video.ID > 0) {
+	if video.ID > 0 {
 		_, filename := path.Split(video.URL)
 		disposition := `attachment; filename="` + filename + `"`
 		w.Header().Set("Content-Disposition", disposition)
@@ -541,10 +537,10 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("/v/%s", id)
 
-	video := &models.Video {}
-	app.DataBase.First(video, id);
+	video := &models.Video{}
+	app.DataBase.First(video, id)
 
-	if (video.ID > 0) {
+	if video.ID > 0 {
 		app.DataBase.First(&video.User, video.UserID)
 
 		w.Header().Set("Content-Type", "application/json")
@@ -555,31 +551,105 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-	// TODO: Make this a background job
-	// Resize for lower quality options
-	// for size, suffix := range app.Config.Transcoder.Sizes {
-	// 	log.
-	// 		WithField("size", size).
-	// 		WithField("vf", filepath.Base(vf)).
-	// 		Info("resizing video for lower quality playback")
-	// 	sf := fmt.Sprintf(
-	// 		"%s#%s.mp4",
-	// 		strings.TrimSuffix(vf, filepath.Ext(vf)),
-	// 		suffix,
-	// 	)
-	// 	if err := utils.RunCmd(
-	// 		app.Config.Transcoder.Timeout,
-	// 		"ffmpeg", "-y", "-i", vf, "-s", size,
-	// 		"-c:v", "libx264", "-c:a", "aac",
-	// 		"-crf", "18", "-strict", "-2", "-loglevel", "quiet",
-	// 		"-metadata", fmt.Sprintf("title=%s", title),
-	// 		"-metadata", fmt.Sprintf("comment=%s", description),
-	// 		sf,
-	// 	); err != nil {
-	// 		err := fmt.Errorf("error transcoding video: %w", err)
-	// 		log.Error(err)
-	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// }
+func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
+	like := &models.Like{}
+	err := json.NewDecoder(r.Body).Decode(like)
+	if err != nil {
+		http.Error(w, "Cannot decode like", http.StatusBadRequest)
+		log.Info(err)
+		return
+	}
 
+	uid_ctx := r.Context().Value("userID")
+	uid := uid_ctx.(uint)
+	if uid != like.UID {
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
+		log.Info("Not authorized")
+		return
+	}
+
+	vid := &models.Video{}
+	app.DataBase.First(vid, like.VID)
+
+	if vid.ID <= 0 {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		log.Info("Video not found")
+		return
+	}
+
+	if r.Method == http.MethodPost { // CREATE NEW LIKE
+		// CHECK THAT LIKE DOES NOT EXISTS
+		_l := &models.Like{}
+		res := app.DataBase.Where("uid = ? AND v_id = ?", like.UID, like.VID).First(_l)
+		if res.Error != nil || _l.ID > 0 || like.UID <= 0 || like.VID <= 0 {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			log.Info("Bad request")
+			return
+		}
+
+		if like.IsDislike {
+			vid.Dislikes++
+		} else {
+			vid.Likes++
+		}
+		app.DataBase.Save(vid)
+		app.DataBase.Save(like)
+	} else if r.Method == http.MethodPut { // UPDATE LIKE (e.g. change to dislike)
+		// CHECK IF LIKE EXISTS
+		_l := &models.Like{}
+		app.DataBase.Where("uid = ? AND v_id = ?", like.UID, like.VID).First(_l)
+		if _l.ID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			log.Info("Not found")
+			return
+		}
+		like.ID = _l.ID
+		if like.IsDislike && !_l.IsDislike {
+			vid.Dislikes++
+			vid.Likes--
+		} else if !like.IsDislike && _l.IsDislike {
+			vid.Dislikes--
+			vid.Likes++
+		}
+
+		app.DataBase.Save(like)
+		app.DataBase.Save(vid)
+	} else if r.Method == http.MethodDelete { // DELETE LIKE
+		app.DataBase.Delete(like)
+		if (like.IsDislike) {
+			vid.Dislikes--
+		} else {
+			vid.Likes--
+		}
+		app.DataBase.Save(vid)
+	}
+
+}
+
+// TODO: Make this a background job
+// Resize for lower quality options
+// for size, suffix := range app.Config.Transcoder.Sizes {
+// 	log.
+// 		WithField("size", size).
+// 		WithField("vf", filepath.Base(vf)).
+// 		Info("resizing video for lower quality playback")
+// 	sf := fmt.Sprintf(
+// 		"%s#%s.mp4",
+// 		strings.TrimSuffix(vf, filepath.Ext(vf)),
+// 		suffix,
+// 	)
+// 	if err := utils.RunCmd(
+// 		app.Config.Transcoder.Timeout,
+// 		"ffmpeg", "-y", "-i", vf, "-s", size,
+// 		"-c:v", "libx264", "-c:a", "aac",
+// 		"-crf", "18", "-strict", "-2", "-loglevel", "quiet",
+// 		"-metadata", fmt.Sprintf("title=%s", title),
+// 		"-metadata", fmt.Sprintf("comment=%s", description),
+// 		sf,
+// 	); err != nil {
+// 		err := fmt.Errorf("error transcoding video: %w", err)
+// 		log.Error(err)
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+// }

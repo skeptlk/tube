@@ -1,8 +1,6 @@
 
-CREATE database 'tube';
+CREATE database 'nontube';
 
--- tubeadmin
--- drowssap
 CREATE USER 'tubeadmin'@'localhost' IDENTIFIED by 'drowssap';
 GRANT ALL ON nontube.* TO 'tubeadmin'@'localhost';
 
@@ -15,7 +13,6 @@ CREATE TABLE `users` (
     `updated_at` timestamp,
     `deleted_at` timestamp
 );
-
 
 CREATE TABLE `videos` (
     `id` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -33,4 +30,9 @@ CREATE TABLE `videos` (
     `deleted_at` timestamp
 );
 
-
+CREATE TABLE `likes` (
+    `id` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `uid` int NOT NULL,
+    `v_id` int NOT NULL,
+    `is_dislike` int NOT NULL DEFAULT 0
+)

@@ -2,3 +2,26 @@
 .video {
     max-width: 100%;
 }
+
+.controls {
+    float: right;
+}
+
+
+.likes {
+    float: right;
+    margin-right: 15px;
+    clr-icon {
+        width: 23px;
+        height: 23px;
+    }
+    button {
+        font-size: 1.3em;
+        border-color: transparent;
+        min-width: 75px;
+        &.pressed {
+            border-color: #0072a3;
+        }
+    }
+
+}
