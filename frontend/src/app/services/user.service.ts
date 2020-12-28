@@ -6,10 +6,12 @@ import { User } from "../models";
 @Injectable({ providedIn: 'root' })
 export class UserService {
 
+    BASE_URL: string = 'http://localhost:8000';
+
     constructor(private http: HttpClient) {}
 
     public create(data: { name: string, email: string, password: string }) {
-        return this.http.post<any>(`http://localhost:8000/auth/signup`, data)
+        return this.http.post<any>(this.BASE_URL + `auth/signup`, data)
         .pipe(map(resp => new User(resp)));
     }
 

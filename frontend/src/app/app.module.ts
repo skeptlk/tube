@@ -18,6 +18,7 @@ import { LoginComponent } from './login/login.component';
 import { SignupComponent } from './signup/signup.component';
 import { VideoComponent } from './video/video.component';
 import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-controls.component';
+import { CommentsComponent } from './comments/comments.component';
 
 
 @NgModule({
@@ -31,7 +32,8 @@ import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-
         LoginComponent,
         SignupComponent,
         VideoComponent,
-        VideoOwnerControlsComponent
+        VideoOwnerControlsComponent,
+        CommentsComponent
     ],
     imports: [
         BrowserModule,
