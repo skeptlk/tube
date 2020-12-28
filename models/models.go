@@ -47,6 +47,21 @@ type Like struct {
 	IsDislike bool		`gorm:"default:false" json:"isDislike,string"`
 }
 
+// Comment model
+type Comment struct {
+	ID uint				`gorm:"primaryKey" json:"id,string,omitempty"`
+	UserID uint			`json:"userId,string"`
+	User User			`json:"user"`
+	VideoID uint		`json:"videoId,string"`
+	ReplyTo uint		`json:"replyTo,string"`
+	ReplyCount int 		`gorm:"-" json:"replyCount"`
+	Text string 		`json:"text"`
+
+	CreatedAt time.Time			`json:"-"`
+	UpdatedAt time.Time			`json:"-"`
+	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
+}
+
 // ErrResponse - Error response
 type ErrResponse struct {
 	Error string `json:"error"`

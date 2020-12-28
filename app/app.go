@@ -83,7 +83,7 @@ func NewApp(cfg *Config) (*App, error) {
 
 	app.Templates = newTemplateStore("base")
 
-	templateFuncs := map[string]interface {} {
+	templateFuncs := map[string]interface{}{
 		"bytes": func(size int64) string { return humanize.Bytes(uint64(size)) },
 	}
 
@@ -110,11 +110,13 @@ func NewApp(cfg *Config) (*App, error) {
 
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(app.jwtVerify)
-	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
+	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/video/{id}/comments", app.apiGetVideoCommentsHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/like/{id}", app.apiLikeHandler).Methods("POST", "DELETE", "OPTIONS")
 	api.HandleFunc("/like/{id}", app.apiCheckLiked).Methods("GET")
 	api.HandleFunc("/dislike/{id}", app.apiDislikeHandler).Methods("POST", "DELETE", "OPTIONS")
+	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
 
 	// Static assets handler
 	staticFs := http.FileServer(http.Dir("./static"))
@@ -551,7 +553,7 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("Video not found"))
 	}
-	
+
 	defer app.incrementViews(video)
 }
 
@@ -559,7 +561,7 @@ func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
 	uidCtx := r.Context().Value("userID")
 
-	like := &models.Like {}
+	like := &models.Like{}
 	app.DataBase.Table("likes").Where("uid = ? AND v_id = ?", uidCtx, vID).First(like)
 
 	video := &models.Video{}
@@ -571,7 +573,7 @@ func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		// IF LIKE FOUND AND IT IS DISLIKE 
+		// IF LIKE FOUND AND IT IS DISLIKE
 		if like.ID > 0 && like.IsDislike {
 			// change to like and save
 			like.IsDislike = false
@@ -591,7 +593,7 @@ func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == http.MethodDelete {
 		// IF LIKE FOUND AND IT IS NOT DISLIKE
-		if (like.ID > 0 && like.IsDislike == false) {
+		if like.ID > 0 && like.IsDislike == false {
 			video.Likes--
 			app.DataBase.Delete(like)
 			app.DataBase.Save(video)
@@ -606,7 +608,7 @@ func (app *App) apiCheckLiked(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
 	uidCtx := r.Context().Value("userID")
 
-	like := &models.Like {}
+	like := &models.Like{}
 	app.DataBase.Table("likes").Where("uid = ? AND v_id = ?", uidCtx, vID).First(like)
 
 	video := &models.Video{}
@@ -617,16 +619,14 @@ func (app *App) apiCheckLiked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]bool {
-		"liked": (like.ID > 0 && !like.IsDislike), 
+	resp := map[string]bool{
+		"liked":    (like.ID > 0 && !like.IsDislike),
 		"disliked": (like.ID > 0 && like.IsDislike),
 	}
 	json.NewEncoder(w).Encode(resp)
 }
 
-
-
-func (app *App) apiDislikeHandler (w http.ResponseWriter, r *http.Request) {
+func (app *App) apiDislikeHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
 	uidCtx := r.Context().Value("userID")
 
@@ -636,13 +636,13 @@ func (app *App) apiDislikeHandler (w http.ResponseWriter, r *http.Request) {
 	video := &models.Video{}
 	app.DataBase.First(video, vID)
 	if video.ID <= 0 {
-		http.Error(w, "Video not found", http.StatusNotFound)
+		http.Error(w, "Video not found", http.StatusBadRequest)
 		log.Info("Video not found")
 		return
 	}
 
 	if r.Method == http.MethodPost {
-		// IF LIKE FOUND AND IT IS NOT DISLIKE 
+		// IF LIKE FOUND AND IT IS NOT DISLIKE
 		if like.ID > 0 && like.IsDislike == false {
 			// change to like and save
 			like.IsDislike = false
@@ -663,7 +663,7 @@ func (app *App) apiDislikeHandler (w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == http.MethodDelete {
 		// IF LIKE FOUND AND IT IS DISLIKE
-		if (like.ID > 0 && like.IsDislike) {
+		if like.ID > 0 && like.IsDislike {
 			video.Dislikes--
 			app.DataBase.Delete(like)
 			app.DataBase.Save(video)
@@ -672,6 +672,49 @@ func (app *App) apiDislikeHandler (w http.ResponseWriter, r *http.Request) {
 			log.Info("Bad request")
 		}
 	}
+}
+
+// HTTP handler for [POST] /api/comment/
+func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) {
+	uidCtx := r.Context().Value("userID")
+
+	comment := &models.Comment{}
+	json.NewDecoder(r.Body).Decode(comment)
+	comment.UserID = uidCtx.(uint)
+
+	// CHECK VIDEO EXISTS
+	video := &models.Video{}
+	app.DataBase.Find(video, comment.VideoID)
+	if video.ID <= 0 {
+		http.Error(w, "Video not found", http.StatusBadRequest)
+		log.Info("Video not found")
+		return
+	}
+
+	// CHECK REFERENCED COMMENT EXISTS
+	if (comment.ReplyTo > 0) {
+		refcomm := &models.Comment{}
+		app.DataBase.Find(refcomm, comment.ReplyTo);
+		if refcomm.ID <= 0 {
+			http.Error(w, "Refrenced comment not found", http.StatusBadRequest)
+			log.Info("Refrenced comment not found")
+			return
+		}
+	}
+	app.DataBase.Save(comment)
+
+	json.NewEncoder(w).Encode(comment)
+}
+
+// HTTP handler for [GET] /api/video/{id}/comments
+func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Request) {
+	vID := mux.Vars(r)["id"]
+	var comments []models.Comment;
+	app.DataBase.
+		Raw("SELECT *, (SELECT COUNT(*) FROM comments WHERE reply_to = comm.id) AS reply_count FROM comments as comm WHERE video_id = ?;", vID).
+		Scan(&comments)
+
+	json.NewEncoder(w).Encode(comments)
 }
 
 // TODO: Make this a background job
