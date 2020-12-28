@@ -117,6 +117,7 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/like/{id}", app.apiCheckLiked).Methods("GET")
 	api.HandleFunc("/dislike/{id}", app.apiDislikeHandler).Methods("POST", "DELETE", "OPTIONS")
 	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
+	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
 
 	// Static assets handler
 	staticFs := http.FileServer(http.Dir("./static"))
@@ -679,7 +680,12 @@ func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) 
 	uidCtx := r.Context().Value("userID")
 
 	comment := &models.Comment{}
-	json.NewDecoder(r.Body).Decode(comment)
+	err := json.NewDecoder(r.Body).Decode(comment)
+	if (err != nil) {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		log.Info(err)
+		return
+	}
 	comment.UserID = uidCtx.(uint)
 
 	// CHECK VIDEO EXISTS
@@ -692,7 +698,7 @@ func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// CHECK REFERENCED COMMENT EXISTS
-	if (comment.ReplyTo > 0) {
+	if (comment.ReplyTo.Int64 > 0) {
 		refcomm := &models.Comment{}
 		app.DataBase.Find(refcomm, comment.ReplyTo);
 		if refcomm.ID <= 0 {
@@ -700,19 +706,57 @@ func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) 
 			log.Info("Refrenced comment not found")
 			return
 		}
+	} else {
+		comment.ReplyTo.Valid = false
 	}
-	app.DataBase.Save(comment)
-
+	res := app.DataBase.Save(comment)
+	
+	if res.Error != nil {
+		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
 	json.NewEncoder(w).Encode(comment)
 }
 
+// HTTP handler for [GET] /api/comment/{id}
+func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
+	commID := mux.Vars(r)["id"]
+
+	comment := &models.Comment{}
+	app.DataBase.Preload("User").Preload("Replies").Find(comment, commID);
+	if comment.ID <= 0 {
+		http.Error(w, "Comment not found", http.StatusBadRequest)
+		log.Info("Comment not found")
+		return
+	}
+
+	for i := range comment.Replies {
+		app.DataBase.Find(&comment.Replies[i].User, comment.Replies[i].UserID)
+	}
+
+
+	json.NewEncoder(w).Encode(comment);
+}
+
 // HTTP handler for [GET] /api/video/{id}/comments
+// This thing is really slooow
 func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
 	var comments []models.Comment;
-	app.DataBase.
-		Raw("SELECT *, (SELECT COUNT(*) FROM comments WHERE reply_to = comm.id) AS reply_count FROM comments as comm WHERE video_id = ?;", vID).
+
+	res := app.DataBase.
+		Raw("SELECT *, (SELECT COUNT(*) FROM comments WHERE reply_to = comm.id) AS reply_count FROM comments as comm WHERE video_id = ? AND reply_to IS NULL;", vID).
 		Scan(&comments)
+	if res.Error != nil {
+		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
+
+	for i := range comments {
+		app.DataBase.Find(&comments[i].User, comments[i].UserID)
+	}
 
 	json.NewEncoder(w).Encode(comments)
 }

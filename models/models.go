@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"gopkg.in/guregu/null.v3"
 	"gorm.io/gorm"
 )
 
@@ -53,8 +54,9 @@ type Comment struct {
 	UserID uint			`json:"userId,string"`
 	User User			`json:"user"`
 	VideoID uint		`json:"videoId,string"`
-	ReplyTo uint		`json:"replyTo,string"`
+	ReplyTo null.Int	`json:"replyTo,string,omitempty"`
 	ReplyCount int 		`gorm:"-" json:"replyCount"`
+	Replies []Comment 	`gorm:"foreignKey:ReplyTo" json:"replies"`
 	Text string 		`json:"text"`
 
 	CreatedAt time.Time			`json:"-"`
