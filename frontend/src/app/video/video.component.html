@@ -28,9 +28,21 @@
             </div>
         </div>
 
+        <div>
+            <h2 class="title">{{ video.title }}</h2>
+            <p class="description">{{ video.description }}</p>
+        </div>
 
-        <h2>{{ video.title }}</h2>
-        <p>{{ video.description }}</p>
+        <div *ngIf="!auth.currentUserValue">
+            <h3 class="disabled">Log in to see comments section</h3>
+        </div>
+
+        <video-comments 
+            *ngIf="auth.currentUserValue"
+            [videoId]="video.id"
+            [user]="auth.currentUserValue">
+        </video-comments>
+        
     </div>
     <div class="clr-col-3">
         <h3>Check out other cool vids:</h3>

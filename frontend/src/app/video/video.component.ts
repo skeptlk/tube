@@ -28,12 +28,12 @@ export class VideoComponent implements OnInit {
             .subscribe(vid => {
                 this.video = vid;
                 this.showOwnerControls = (vid.userId === this.auth.currentUserValue.id);
-            })
+            });
         this.videoService.likeInfo(this.id)
             .subscribe(resp => {
                 this.isLiked = resp.liked;
                 this.isDisliked = resp.disliked;
-            })
+            });
     }
 
     toggleLike() {

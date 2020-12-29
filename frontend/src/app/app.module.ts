@@ -3,6 +3,7 @@ import { NgModule } from '@angular/core';
 import { AppRoutingModule } from './app-routing.module';
 import { ClarityModule } from '@clr/angular';
 import { ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
@@ -19,6 +20,7 @@ import { SignupComponent } from './signup/signup.component';
 import { VideoComponent } from './video/video.component';
 import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-controls.component';
 import { CommentsComponent } from './comments/comments.component';
+import { SingleCommentComponent } from './src/app/comments/single-comment/single-comment.component';
 
 
 @NgModule({
@@ -33,7 +35,8 @@ import { CommentsComponent } from './comments/comments.component';
         SignupComponent,
         VideoComponent,
         VideoOwnerControlsComponent,
-        CommentsComponent
+        CommentsComponent,
+        SingleCommentComponent
     ],
     imports: [
         BrowserModule,
@@ -41,7 +44,8 @@ import { CommentsComponent } from './comments/comments.component';
         HttpClientModule,
         ClarityModule,
         BrowserAnimationsModule,
-        ReactiveFormsModule
+        ReactiveFormsModule,
+        FormsModule
     ],
     providers: [
         { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },

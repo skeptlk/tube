@@ -743,7 +743,8 @@ func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
 // This thing is really slooow
 func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
-	var comments []models.Comment;
+
+	comments := []models.Comment{}
 
 	res := app.DataBase.
 		Raw("SELECT *, (SELECT COUNT(*) FROM comments WHERE reply_to = comm.id) AS reply_count FROM comments as comm WHERE video_id = ? AND reply_to IS NULL;", vID).

@@ -7,6 +7,10 @@
     display: block;
 }
 
+.float-right { float: right;       }
+.float-left  { float: left;        }
+.clearfix    { display: flow-root; }
+
 .not-visible {
     position: fixed;
     visibility: 0;

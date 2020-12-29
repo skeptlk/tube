@@ -10,17 +10,19 @@ export class Comment {
     replies: Comment[];
     text: string;
 
-    constructor (base: any) {
-        this.id = base['id'];
-        this.userId = base['userId'];
-        this.user = new User(base['user']);
-        this.videoId = base['videoId'];
-        this.replyTo = base['replyTo'];
-        this.replyCount = base['replyCount'];
-        this.text = base['text'];
-
-        if (base['replies']) {
-            this.replies = base['replies'].map(r => new Comment(r));
+    constructor (base: any = undefined) {
+        if (base) {
+            this.id = base['id'];
+            this.userId = base['userId'];
+            this.user = new User(base['user']);
+            this.videoId = base['videoId'];
+            this.replyTo = base['replyTo'];
+            this.replyCount = base['replyCount'];
+            this.text = base['text'];
+    
+            if (base['replies']) {
+                this.replies = base['replies'].map(r => new Comment(r));
+            }
         }
     }
 }

@@ -62,7 +62,6 @@ export class UploadComponent {
 
             this.vidService.upload(fd)
                 .subscribe((resp) => {
-                    console.log(resp)
                     this.router.navigate([this.vidService.BASE_URL, 'v', resp.id])
                 });
         }

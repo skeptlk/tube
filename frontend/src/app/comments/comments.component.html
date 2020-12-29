@@ -1,1 +1,44 @@
-<p>comments works!</p>
+
+
+<form class="card new-comment">
+    <div class="card-block">
+        <div *ngIf="replyTo">
+            Reply to {{ replyTo.user.name }} 
+            <clr-icon shape="times"
+                (click)="replyTo = undefined;">
+            </clr-icon>
+        </div>
+        <input class="new-comment-inp" type="text" 
+            [(ngModel)]="newComment.text" name="text"
+            placeholder="Your comment...">
+    </div>
+    <div class="card-footer clearfix">
+        <button (click)="submitComment()"
+            class="btn btn-primary float-right">
+            Comment
+        </button>
+    </div>
+</form>
+
+<h3 *ngIf="comments.length > 0">{{ comments.length }} comments</h3>
+<h3 *ngIf="comments.length === 0">No comments yet</h3>
+
+<div *ngFor="let comment of comments" class="comment">
+    <div class="label">{{ comment.user.name }}</div>
+    <a (click)="replyTo = comment;" class="reply">Reply</a>
+    <div class="body">
+        {{ comment.text }}
+    </div>
+
+    <a *ngIf="comments.replyCount > 0"
+        (click)="expand">
+        Show replies ({{ comments.replyCount }})
+        <clr-icon shape="angle" dir="down">
+        </clr-icon>
+    </a>
+
+    <div class="subcomments">
+        
+    </div>
+
+</div>
