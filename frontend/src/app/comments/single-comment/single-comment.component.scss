@@ -1,0 +1,30 @@
+
+.comment {
+    padding: 5px;
+    padding-left: 0;
+    margin-top: 5px;
+
+    &> .reply {
+        float: right;
+        display: block;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .body {
+        margin-top: 8px;
+    }
+    &:hover {
+        &> .reply { opacity: 1; }
+    }
+
+    .expand-replies {
+        margin-top: 5px;
+        cursor: pointer;
+    }
+
+    .replies {
+        padding-left: 20px;
+        border-left: 1px solid #dedede;
+    }
+}

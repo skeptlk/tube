@@ -8,14 +8,12 @@ import { Comment, User } from '../models';
     styleUrls: ['./comments.component.scss']
 })
 export class CommentsComponent implements OnInit {
-
     @Input() videoId: number;
-    @Input() user: User;
+
     comments: Comment[] = [];
-    replyTo: Comment;
     newComment: Comment = new Comment();
 
-    constructor(private commentsService: CommentsService) { }
+    constructor(public commentsService: CommentsService) { }
 
     ngOnInit() {
         this.commentsService
@@ -24,18 +22,16 @@ export class CommentsComponent implements OnInit {
     }
 
     submitComment() {
-        const comm = this.newComment;
-        comm.videoId = this.videoId;
-        comm.userId = this.user.id;
-        comm.user = this.user;
-        if (this.replyTo) {
-            comm.replyTo = this.replyTo.id;
-        }
-        this.comments.push(comm);
-
         this.commentsService
-            .create(comm)
-            .toPromise();
+            .create(this.newComment.text, this.videoId)
+            .subscribe(comm => {
+                if (!this.commentsService.replyTo) {
+                    this.comments.push(comm);
+                }
+                this.commentsService.replyTo = undefined;
+            })
+
+        this.newComment = new Comment();
     }
 
 }

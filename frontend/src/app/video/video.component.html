@@ -33,14 +33,13 @@
             <p class="description">{{ video.description }}</p>
         </div>
 
-        <div *ngIf="!auth.currentUserValue">
+        <div *ngIf="!auth.isAuthorized">
             <h3 class="disabled">Log in to see comments section</h3>
         </div>
 
         <video-comments 
-            *ngIf="auth.currentUserValue"
-            [videoId]="video.id"
-            [user]="auth.currentUserValue">
+            *ngIf="auth.isAuthorized"
+            [videoId]="video.id">
         </video-comments>
         
     </div>

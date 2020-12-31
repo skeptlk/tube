@@ -20,7 +20,7 @@ import { SignupComponent } from './signup/signup.component';
 import { VideoComponent } from './video/video.component';
 import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-controls.component';
 import { CommentsComponent } from './comments/comments.component';
-import { SingleCommentComponent } from './src/app/comments/single-comment/single-comment.component';
+import { SingleCommentComponent } from './comments/single-comment/single-comment.component';
 
 
 @NgModule({

@@ -2,10 +2,10 @@
 
 <form class="card new-comment">
     <div class="card-block">
-        <div *ngIf="replyTo">
-            Reply to {{ replyTo.user.name }} 
+        <div *ngIf="commentsService.replyTo">
+            Reply to {{ commentsService.replyTo.user.name }} 
             <clr-icon shape="times"
-                (click)="replyTo = undefined;">
+                (click)="commentsService.replyTo = undefined;">
             </clr-icon>
         </div>
         <input class="new-comment-inp" type="text" 
@@ -23,22 +23,6 @@
 <h3 *ngIf="comments.length > 0">{{ comments.length }} comments</h3>
 <h3 *ngIf="comments.length === 0">No comments yet</h3>
 
-<div *ngFor="let comment of comments" class="comment">
-    <div class="label">{{ comment.user.name }}</div>
-    <a (click)="replyTo = comment;" class="reply">Reply</a>
-    <div class="body">
-        {{ comment.text }}
-    </div>
-
-    <a *ngIf="comments.replyCount > 0"
-        (click)="expand">
-        Show replies ({{ comments.replyCount }})
-        <clr-icon shape="angle" dir="down">
-        </clr-icon>
-    </a>
-
-    <div class="subcomments">
-        
-    </div>
-
-</div>
+<single-comment *ngFor="let comment of comments"
+    [comment]="comment">
+</single-comment>

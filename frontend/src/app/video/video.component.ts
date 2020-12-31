@@ -27,16 +27,21 @@ export class VideoComponent implements OnInit {
         this.videoService.getInfo(this.id)
             .subscribe(vid => {
                 this.video = vid;
-                this.showOwnerControls = (vid.userId === this.auth.currentUserValue.id);
+                this.showOwnerControls = (vid.userId === this.auth.currentUserValue?.id);
             });
-        this.videoService.likeInfo(this.id)
-            .subscribe(resp => {
-                this.isLiked = resp.liked;
-                this.isDisliked = resp.disliked;
-            });
+        if (this.auth.isAuthorized) {
+            this.videoService.likeInfo(this.id)
+                .subscribe(resp => {
+                    this.isLiked = resp.liked;
+                    this.isDisliked = resp.disliked;
+                });
+        }
     }
 
     toggleLike() {
+        if (!this.auth.isAuthorized) {
+            return;
+        }
         if (this.isLiked) {
             this.videoService.removeLike(this.video.id).toPromise();
             this.isLiked = false;
@@ -53,6 +58,9 @@ export class VideoComponent implements OnInit {
     }
 
     toggleDislike() {
+        if (!this.auth.isAuthorized) {
+            return;
+        }
         if (this.isDisliked) {
             this.videoService.removeDislike(this.video.id).toPromise();
             this.isDisliked = false;

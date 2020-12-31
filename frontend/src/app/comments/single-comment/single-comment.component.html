@@ -1,1 +1,25 @@
-<p>single-comment works!</p>
+
+<div class="comment">
+    <div class="label">{{ comment.user.name }}</div>
+    <a (click)="reply()" class="reply">Reply</a>
+    <div class="body">
+        {{ comment.text }}
+    </div>
+
+    <a *ngIf="comment.replyCount > 0"
+        (click)="toggleReplies()"
+        class="expand-replies">
+        {{ (repliesShown) ? "Hide replies" : "Show replies" }}
+        ({{ comment.replyCount }})
+        <clr-icon shape="angle" dir="down">
+        </clr-icon>
+    </a>
+
+    <div *ngIf="comment.replyCount > 0 && repliesShown" 
+        class="replies">
+        <single-comment 
+            *ngFor="let reply of comment.replies" 
+            [comment]="reply">
+        </single-comment>
+    </div>
+</div>

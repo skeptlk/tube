@@ -22,6 +22,8 @@ export class Comment {
     
             if (base['replies']) {
                 this.replies = base['replies'].map(r => new Comment(r));
+            } else {
+                this.replies = [];
             }
         }
     }

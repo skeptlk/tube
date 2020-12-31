@@ -19,6 +19,10 @@ export class AuthService {
         return this.currentUserSubject.value;
     }
 
+    public get isAuthorized(): boolean {
+        return !!(this.currentUserSubject.value);
+    }
+
     public login(data : { name: string, password: string }) {
         return this.http.post<any>(`http://localhost:8000/auth/login`, data)
             .pipe(map(resp => {

@@ -679,6 +679,7 @@ func (app *App) apiDislikeHandler(w http.ResponseWriter, r *http.Request) {
 func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) {
 	uidCtx := r.Context().Value("userID")
 
+
 	comment := &models.Comment{}
 	err := json.NewDecoder(r.Body).Decode(comment)
 	if (err != nil) {
@@ -687,6 +688,8 @@ func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	comment.UserID = uidCtx.(uint)
+
+	log.Info(fmt.Sprintf("Creating comment %s", comment.Text))
 
 	// CHECK VIDEO EXISTS
 	video := &models.Video{}
@@ -724,17 +727,30 @@ func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
 	commID := mux.Vars(r)["id"]
 
 	comment := &models.Comment{}
-	app.DataBase.Preload("User").Preload("Replies").Find(comment, commID);
+	app.DataBase.Find(comment, commID);
 	if comment.ID <= 0 {
 		http.Error(w, "Comment not found", http.StatusBadRequest)
 		log.Info("Comment not found")
 		return
 	}
 
-	for i := range comment.Replies {
-		app.DataBase.Find(&comment.Replies[i].User, comment.Replies[i].UserID)
+	res := app.DataBase.
+		Table("comments").
+		Where("reply_to = ?", comment.ID).
+		Scan(&comment.Replies)
+	if res.Error != nil {
+		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
 	}
 
+	comment.ReplyCount = len(comment.Replies)
+	for i := range comment.Replies {
+		app.DataBase.Find(&comment.Replies[i].User, comment.Replies[i].UserID)
+		app.DataBase.
+			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ?;", comment.Replies[i].ID).
+			Scan(&comment.Replies[i].ReplyCount)
+	}
 
 	json.NewEncoder(w).Encode(comment);
 }
@@ -747,7 +763,8 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 	comments := []models.Comment{}
 
 	res := app.DataBase.
-		Raw("SELECT *, (SELECT COUNT(*) FROM comments WHERE reply_to = comm.id) AS reply_count FROM comments as comm WHERE video_id = ? AND reply_to IS NULL;", vID).
+		Table("comments").
+		Where("video_id = ? AND reply_to IS NULL", vID).
 		Scan(&comments)
 	if res.Error != nil {
 		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
@@ -757,6 +774,9 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 
 	for i := range comments {
 		app.DataBase.Find(&comments[i].User, comments[i].UserID)
+		app.DataBase.
+			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ?;", comments[i].ID).
+			Scan(&comments[i].ReplyCount)
 	}
 
 	json.NewEncoder(w).Encode(comments)

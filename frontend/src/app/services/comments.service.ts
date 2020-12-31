@@ -2,16 +2,33 @@ import { HttpClient } from "@angular/common/http";
 import { Injectable } from "@angular/core";
 import { map } from "rxjs/operators";
 import { Comment } from "../models";
+import { AuthService } from "./auth.service";
 
 @Injectable({ providedIn: 'root' })
 export class CommentsService {
+    private BASE_URL: string = 'http://localhost:8000';
+    public replyTo: Comment;
 
-    BASE_URL: string = 'http://localhost:8000';
+    constructor(
+        private http: HttpClient, 
+        private auth: AuthService
+    ) {}
 
-    constructor(private http: HttpClient) {}
+    public create(text: string, videoId: number) {
+        var comm = new Comment();
+        comm.text = text;
+        comm.videoId = videoId;
+        comm.userId = this.auth.currentUserValue.id;
+        comm.user = this.auth.currentUserValue;
 
-    public create(comment: Comment) {
-        return this.http.post<any>(this.BASE_URL + `/api/comment`, comment)
+        if (this.replyTo) {
+            comm.replyTo = this.replyTo.id;
+            this.replyTo.replies = [comm, ...this.replyTo.replies];
+            this.replyTo.replyCount++;
+        }
+
+        return this.http
+            .post<any>(this.BASE_URL + `/api/comment`, comm)
             .pipe(
                 map(resp => new Comment(resp))
             );
@@ -26,7 +43,9 @@ export class CommentsService {
 
     public get(commId: number) {
         return this.http.get<any>(this.BASE_URL + '/api/comment/' + commId)
-            .pipe();
+            .pipe(
+                map(resp => new Comment(resp))
+            );
     }
 
 }
