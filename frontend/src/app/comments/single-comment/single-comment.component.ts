@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { CommentsService } from 'src/app/services';
 import { Comment } from '../../models';
 
@@ -10,6 +10,7 @@ import { Comment } from '../../models';
 export class SingleCommentComponent {
 
     @Input() comment: Comment;
+    @Input() userId: number; // current user id
     repliesShown: boolean = false;
 
     constructor(private commentsService: CommentsService) { }
@@ -26,6 +27,12 @@ export class SingleCommentComponent {
 
     reply() {
         this.commentsService.replyTo = this.comment;
+    }
+
+    deleteComm() {
+        if (confirm(`Are you sure to delete comment "${this.comment.text}"?`)) {
+            this.commentsService.delete(this.comment.id).toPromise();
+        }
     }
 
 }

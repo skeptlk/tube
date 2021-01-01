@@ -1,9 +1,64 @@
 
-<h3>Here goes stuff about your account</h3>
-<hr>
 
-<button (click)="auth.logout()"
-    class="btn btn-danger-outline">
-    Logout
-</button>
+<div class="clr-row">
+    <div class="clr-col-12">
+        <h3>Account info</h3>
+    </div>
 
+    <div class="clr-col-4">
+        <form clrForm [formGroup]="editProfileForm">
+            <clr-input-container>
+                <label>Name</label>
+                <input clrInput type="text" 
+                    formControlName="name" name="name" 
+                    [value]="user.name"/>
+            </clr-input-container>
+            <clr-input-container>
+                <label>Email</label>
+                <input clrInput type="email" 
+                    formControlName="email" name="email" 
+                    [value]="user.email"/>
+            </clr-input-container>
+            <button *ngIf="editProfileForm.touched" 
+                (click)="auth.logout()"
+                class="btn btn-primary float-right">
+                Save
+            </button>
+        </form>
+    </div>
+
+    <div class="clr-col-8">
+    </div>
+    
+    <div class="clr-col-12">
+        <button (click)="auth.logout()"
+            class="btn btn-danger-outline logout-btn">
+            Logout
+        </button>
+    </div>
+
+    <hr>
+</div>
+
+<div class="clr-row video-list">
+    <div class="clr-col-12">
+        <h3>Uploaded videos</h3>
+    </div>
+
+    <div *ngFor="let vid of myVideos" class="clr-col-3 video-card">
+        <a [routerLink]="'/v/'+vid.id" class="card clickable">
+            <div class="card-img">
+                <img [src]="vidService.BASE_URL + '/' + vid.thumbnail" 
+                    [alt]="vid.title" />
+            </div>
+            <div class="card-block">
+                <p class="card-text">
+                    {{ vid.title }}
+                </p>
+                <div>
+                    <span class="label">{{ vid?.user.name }}</span>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>

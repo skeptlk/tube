@@ -6,7 +6,8 @@ import { catchError } from 'rxjs/operators';
 
 @Injectable()
 export class ErrorInterceptor implements HttpInterceptor {
-    constructor(private authenticationService: AuthService, 
+    constructor(
+        private authenticationService: AuthService, 
         private notifService: NotificationService
         ) { }
 
@@ -15,8 +16,10 @@ export class ErrorInterceptor implements HttpInterceptor {
             if (err.status === 401) {
                 // auto logout if 401 response returned from api
                 this.authenticationService.logout();
-                // location.href = '/';
                 this.notifService.error("Not authorized!");
+            }
+            if (err.status === 404) {
+                location.href = '/'; // TODO: replace with router.navigate
             }
             if (err.status !== 200) {
                 const error = err.error?.message || err.statusText;

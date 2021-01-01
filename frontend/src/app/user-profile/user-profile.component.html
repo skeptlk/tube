@@ -1,15 +1,15 @@
-<div class="clr-row">
-    <div class="clr-col-12">
-        <h1>Welcome to the NonTube!</h1>
-        <h4>Check out our best videos (special for you):</h4>
-    </div>
-</div>
 
-<div class="clr-row video-list">
+<div *ngIf="user" class="clr-row video-list">
+    <div class="clr-col-12">
+        <h3>Videos uploaded by {{ user.name }}:</h3>
+        <h4 *ngIf="videos.length === 0">Nothing here yet...</h4>
+    </div>
+
     <div *ngFor="let vid of videos" class="clr-col-3 video-card">
-        <a [routerLink]="'/v/' + vid.id" class="card clickable">
-            <div class="card-img"
-                [ngStyle]="{ backgroundImage: 'url(' + vidService.BASE_URL + '/' + vid.thumbnail + ')' }">
+        <a [routerLink]="'/v/'+vid.id" class="card clickable">
+            <div class="card-img">
+                <img [src]="vidService.BASE_URL + '/' + vid.thumbnail" 
+                    [alt]="vid.title" />
             </div>
             <div class="card-block">
                 <p class="card-text">

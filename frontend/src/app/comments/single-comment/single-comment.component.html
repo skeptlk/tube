@@ -1,7 +1,12 @@
 
 <div class="comment">
-    <div class="label">{{ comment.user.name }}</div>
-    <a (click)="reply()" class="reply">Reply</a>
+    <a [routerLink]="'/u/' + comment.user.id" class="label">
+        {{ comment.user.name }}
+    </a>
+    <div class="comment-actions">
+        <a (click)="reply()" class="reply">Reply</a>
+        <a (click)="deleteComm()" class="delete">Delete</a>
+    </div>
     <div class="body">
         {{ comment.text }}
     </div>
@@ -11,7 +16,7 @@
         class="expand-replies">
         {{ (repliesShown) ? "Hide replies" : "Show replies" }}
         ({{ comment.replyCount }})
-        <clr-icon shape="angle" dir="down">
+        <clr-icon shape="angle" [dir]="(repliesShown) ? 'up' : 'down'">
         </clr-icon>
     </a>
 
@@ -19,7 +24,8 @@
         class="replies">
         <single-comment 
             *ngFor="let reply of comment.replies" 
-            [comment]="reply">
+            [comment]="reply"
+            [userId]="userId">
         </single-comment>
     </div>
 </div>

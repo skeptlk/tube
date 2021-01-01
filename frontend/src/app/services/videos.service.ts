@@ -66,5 +66,12 @@ export class VideoService {
             .pipe()
     }
 
+    public getUserVideos(id: number) {
+        return this.http.get<any>(`${this.BASE_URL}/user/${id}/video`)
+            .pipe(
+                map(resp => resp.map(vid => new Video(vid)))
+            );
+    }
+
 }
 

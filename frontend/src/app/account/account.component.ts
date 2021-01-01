@@ -1,16 +1,35 @@
 import { Component, OnInit } from '@angular/core';
-import { AuthService } from '../services';
+import { AuthService, UserService, VideoService } from '../services';
+import { User, Video } from '../models';
+import { FormControl, FormGroup, Validators } from '@angular/forms';
 
 @Component({
-  selector: 'app-account',
-  templateUrl: './account.component.html',
-  styleUrls: ['./account.component.scss']
+    selector: 'account',
+    templateUrl: './account.component.html',
+    styleUrls: ['./account.component.scss']
 })
 export class AccountComponent implements OnInit {
+    user: User;
+    myVideos: Video[] = [];
 
-  constructor(public auth: AuthService) { }
+    editProfileForm = new FormGroup({
+        name: new FormControl('', [Validators.required]),
+        email: new FormControl('', [Validators.required, Validators.email])
+    })
 
-  ngOnInit(): void {
-  }
+    constructor(
+        public auth: AuthService,
+        // private userService: UserService,
+        public vidService: VideoService
+    ) { }
+
+    ngOnInit(): void {
+        this.user = this.auth.currentUserValue;
+        this.vidService
+            .getUserVideos(this.user.id)
+            .subscribe(vids => {
+                this.myVideos = vids;
+            });
+    }
 
 }

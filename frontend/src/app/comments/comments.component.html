@@ -20,9 +20,10 @@
     </div>
 </form>
 
-<h3 *ngIf="comments.length > 0">{{ comments.length }} comments</h3>
-<h3 *ngIf="comments.length === 0">No comments yet</h3>
+<h3 *ngIf="commentsService.comments.length > 0">{{ commentsService.comments.length }} comments</h3>
+<h3 *ngIf="commentsService.comments.length === 0">No comments yet</h3>
 
-<single-comment *ngFor="let comment of comments"
-    [comment]="comment">
+<single-comment *ngFor="let comment of commentsService.comments"
+    [comment]="comment"
+    [userId]="userId">
 </single-comment>

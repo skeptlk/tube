@@ -103,6 +103,8 @@ func NewApp(cfg *Config) (*App, error) {
 	router.HandleFunc("/v/list", app.listVideosHandler).Methods("GET")
 	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
 	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
+	router.HandleFunc("/user/{id}", app.getProfileHandler).Methods("GET", "OPTIONS")
+	router.HandleFunc("/user/{id}/video", app.getUserVideosHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 
 	router.HandleFunc("/auth/signup", app.apiCreateUserHandler).Methods("POST", "OPTIONS")
@@ -118,12 +120,13 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/dislike/{id}", app.apiDislikeHandler).Methods("POST", "DELETE", "OPTIONS")
 	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
+	api.HandleFunc("/comment/{id}", app.apiDeleteCommentHandler).Methods("DELETE")
 
 	// Static assets handler
-	staticFs := http.FileServer(http.Dir("./static"))
-	router.PathPrefix("/static/").
-		Handler(http.StripPrefix("/static/", staticFs)).
-		Methods("GET")
+	// staticFs := http.FileServer(http.Dir("./static"))
+	// router.PathPrefix("/static/").
+	// 	Handler(http.StripPrefix("/static/", staticFs)).
+	// 	Methods("GET")
 
 	// Uploads static handler
 	uploadsFs := http.FileServer(http.Dir("./uploads"))
@@ -558,6 +561,46 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 	defer app.incrementViews(video)
 }
 
+// HTTP handler for [GET] /user/id
+func (app *App) getProfileHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+
+	user := &models.User{}
+	app.DataBase.Find(user, id);
+	if user.ID <= 0 {
+		http.Error(w, "User not found", http.StatusNotFound)
+		log.Info("User not found")
+		return
+	}
+
+	user.Password = ""
+	json.NewEncoder(w).Encode(user)
+}
+
+// HTTP handler for [GET] /user/id/video
+func (app *App) getUserVideosHandler(w http.ResponseWriter, r *http.Request) {
+	uid := mux.Vars(r)["id"]
+
+	user := &models.User{}
+	app.DataBase.Find(user, uid);
+	if user.ID <= 0 {
+		http.Error(w, "User not found", http.StatusBadRequest)
+		log.Info("User not found")
+		return
+	}
+
+	var videos []models.Video
+	app.DataBase.Where("user_id = ?", uid).Find(&videos)
+
+	for i := range videos {
+		videos[i].User = *user
+	}
+
+	json.NewEncoder(w).Encode(videos)
+}
+
+
+
 func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
 	uidCtx := r.Context().Value("userID")
@@ -722,12 +765,28 @@ func (app *App) apiCreateCommentHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(comment)
 }
 
+func (app *App) apiDeleteCommentHandler(w http.ResponseWriter, r *http.Request) {
+	commID := mux.Vars(r)["id"]
+
+	comment := &models.Comment{}
+	app.DataBase.Find(comment, commID)
+	if comment.ID <= 0 {
+		http.Error(w, "Comment not found", http.StatusBadRequest)
+		log.Info("Comment not found")
+		return
+	}
+
+	app.DataBase.Delete(&comment)
+
+	json.NewEncoder(w).Encode(comment)
+}
+
 // HTTP handler for [GET] /api/comment/{id}
 func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
 	commID := mux.Vars(r)["id"]
 
 	comment := &models.Comment{}
-	app.DataBase.Find(comment, commID);
+	app.DataBase.Find(comment, commID)
 	if comment.ID <= 0 {
 		http.Error(w, "Comment not found", http.StatusBadRequest)
 		log.Info("Comment not found")
@@ -736,7 +795,7 @@ func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
 
 	res := app.DataBase.
 		Table("comments").
-		Where("reply_to = ?", comment.ID).
+		Where("reply_to = ? AND deleted_at IS NULL", comment.ID).
 		Scan(&comment.Replies)
 	if res.Error != nil {
 		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
@@ -748,7 +807,7 @@ func (app *App) apiGetCommentHandler(w http.ResponseWriter, r *http.Request) {
 	for i := range comment.Replies {
 		app.DataBase.Find(&comment.Replies[i].User, comment.Replies[i].UserID)
 		app.DataBase.
-			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ?;", comment.Replies[i].ID).
+			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ? AND deleted_at IS NULL;", comment.Replies[i].ID).
 			Scan(&comment.Replies[i].ReplyCount)
 	}
 
@@ -764,7 +823,7 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 
 	res := app.DataBase.
 		Table("comments").
-		Where("video_id = ? AND reply_to IS NULL", vID).
+		Where("video_id = ? AND reply_to IS NULL AND deleted_at IS NULL", vID).
 		Scan(&comments)
 	if res.Error != nil {
 		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
@@ -775,7 +834,7 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 	for i := range comments {
 		app.DataBase.Find(&comments[i].User, comments[i].UserID)
 		app.DataBase.
-			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ?;", comments[i].ID).
+			Raw("SELECT COUNT(*) FROM comments WHERE reply_to = ? AND deleted_at IS NULL;", comments[i].ID).
 			Scan(&comments[i].ReplyCount)
 	}
 

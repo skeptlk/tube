@@ -6,8 +6,8 @@ export class Comment {
     user: User;
     videoId: number;
     replyTo: number;
-    replyCount: number;
-    replies: Comment[];
+    replyCount: number = 0;
+    replies: Comment[] = [];
     text: string;
 
     constructor (base: any = undefined) {
@@ -22,8 +22,6 @@ export class Comment {
     
             if (base['replies']) {
                 this.replies = base['replies'].map(r => new Comment(r));
-            } else {
-                this.replies = [];
             }
         }
     }

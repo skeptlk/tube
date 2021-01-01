@@ -21,3 +21,16 @@
 button {
     outline: none !important;
 }
+
+.video-card {
+    .card-img {
+        height: 180px;
+        background-size: cover;
+        overflow: hidden;
+    }
+    .card-text {
+        height: 24px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+}

@@ -9,8 +9,8 @@ import { Comment, User } from '../models';
 })
 export class CommentsComponent implements OnInit {
     @Input() videoId: number;
+    @Input() userId: number;
 
-    comments: Comment[] = [];
     newComment: Comment = new Comment();
 
     constructor(public commentsService: CommentsService) { }
@@ -18,18 +18,13 @@ export class CommentsComponent implements OnInit {
     ngOnInit() {
         this.commentsService
             .list(this.videoId)
-            .subscribe(data => this.comments = data);
+            .toPromise();
     }
 
     submitComment() {
         this.commentsService
             .create(this.newComment.text, this.videoId)
-            .subscribe(comm => {
-                if (!this.commentsService.replyTo) {
-                    this.comments.push(comm);
-                }
-                this.commentsService.replyTo = undefined;
-            })
+            .toPromise();
 
         this.newComment = new Comment();
     }

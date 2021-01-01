@@ -39,7 +39,8 @@
 
         <video-comments 
             *ngIf="auth.isAuthorized"
-            [videoId]="video.id">
+            [videoId]="video.id"
+            [userId]="auth.currentUserValue.id">
         </video-comments>
         
     </div>

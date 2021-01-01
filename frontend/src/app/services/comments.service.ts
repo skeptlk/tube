@@ -8,6 +8,7 @@ import { AuthService } from "./auth.service";
 export class CommentsService {
     private BASE_URL: string = 'http://localhost:8000';
     public replyTo: Comment;
+    public comments: Comment[] = [];
 
     constructor(
         private http: HttpClient, 
@@ -25,19 +26,31 @@ export class CommentsService {
             comm.replyTo = this.replyTo.id;
             this.replyTo.replies = [comm, ...this.replyTo.replies];
             this.replyTo.replyCount++;
+            console.log(this.replyTo.replies, this.replyTo.replyCount);
+            
+        } else {
+            this.comments.push(comm);
         }
 
         return this.http
             .post<any>(this.BASE_URL + `/api/comment`, comm)
             .pipe(
-                map(resp => new Comment(resp))
+                map(resp => {
+                    var created = new Comment(resp);
+                    comm.id = created.id;
+                    return created;
+                })
             );
     }
 
     public list(videoId: number) {
+        this.comments = [];
         return this.http.get<any>(this.BASE_URL + '/api/video/' + videoId + '/comments')
             .pipe(
-                map(resp => resp.map(comm => new Comment(comm)))
+                map(resp => {
+                    this.comments = resp.map(comm => new Comment(comm));
+                    return this.comments;
+                })
             )
     }
 
@@ -45,6 +58,16 @@ export class CommentsService {
         return this.http.get<any>(this.BASE_URL + '/api/comment/' + commId)
             .pipe(
                 map(resp => new Comment(resp))
+            );
+    }
+
+    public delete(commId: number) {
+        return this.http.delete<any>(this.BASE_URL + '/api/comment/' + commId)
+            .pipe(
+                map(resp => {
+                    this.comments = this.comments.filter(comm => comm.id !== commId);
+                    return new Comment(resp)
+                })
             );
     }
 

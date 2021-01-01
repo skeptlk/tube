@@ -11,12 +11,13 @@ export class UserService {
     constructor(private http: HttpClient) {}
 
     public create(data: { name: string, email: string, password: string }) {
-        return this.http.post<any>(this.BASE_URL + `auth/signup`, data)
-        .pipe(map(resp => new User(resp)));
+        return this.http.post<any>(this.BASE_URL + `/auth/signup`, data)
+            .pipe(map(resp => new User(resp)));
     }
 
-    public get(id) {
-        return {};
+    public get(id: number) {
+        return this.http.get<any>(`${this.BASE_URL}/user/${id}`)
+            .pipe(map(resp => new User(resp)));
     }
 
 }

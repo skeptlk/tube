@@ -21,6 +21,7 @@ import { VideoComponent } from './video/video.component';
 import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-controls.component';
 import { CommentsComponent } from './comments/comments.component';
 import { SingleCommentComponent } from './comments/single-comment/single-comment.component';
+import { UserProfileComponent } from './user-profile/user-profile.component';
 
 
 @NgModule({
@@ -36,7 +37,8 @@ import { SingleCommentComponent } from './comments/single-comment/single-comment
         VideoComponent,
         VideoOwnerControlsComponent,
         CommentsComponent,
-        SingleCommentComponent
+        SingleCommentComponent,
+        UserProfileComponent
     ],
     imports: [
         BrowserModule,
