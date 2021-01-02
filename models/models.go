@@ -15,7 +15,7 @@ type User struct {
 	Email string 				`json:"email" gorm:"unique_index"`
 	Password string 			`json:"password"`
 
-	CreatedAt time.Time			`json:"Created"`
+	CreatedAt time.Time			`json:"-"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
@@ -35,7 +35,7 @@ type Video struct {
 	URL string					`json:"url"`
 	ThumbnailURL string			`json:"thumbnail"`
 
-	CreatedAt time.Time			`json:"Created"`
+	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
@@ -59,7 +59,7 @@ type Comment struct {
 	Replies []Comment 	`gorm:"foreignKey:ReplyTo" json:"replies"`
 	Text string 		`json:"text"`
 
-	CreatedAt time.Time			`json:"-"`
+	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }

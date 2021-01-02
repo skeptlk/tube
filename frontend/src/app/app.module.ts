@@ -9,6 +9,9 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { JwtInterceptor, ErrorInterceptor } from './helpers';
 
+import { DateAgoPipe } from 'src/pipes/date-ago.pipe';
+
+
 import { AppComponent } from './app.component';
 import { HomeComponent } from './home/home.component';
 import { AdminComponent } from './admin/admin.component';
@@ -26,6 +29,7 @@ import { UserProfileComponent } from './user-profile/user-profile.component';
 
 @NgModule({
     declarations: [
+        DateAgoPipe,
         AppComponent,
         HomeComponent,
         AdminComponent,

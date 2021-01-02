@@ -7,7 +7,6 @@
         </video>
 
         <div>
-            <span>{{ video.views }} views</span>
             <video-owner-controls *ngIf="showOwnerControls"
                 class="controls"
                 [video]="video">
@@ -26,11 +25,14 @@
                     <clr-icon shape="thumbs-down"></clr-icon>
                 </button>
             </div>
+            <h2 class="title">{{ video.title }}</h2>
+            <p class="description">{{ video.description }}</p>
         </div>
 
         <div>
-            <h2 class="title">{{ video.title }}</h2>
-            <p class="description">{{ video.description }}</p>
+            <div>{{ video.views }} views</div>
+            <div>Uploaded {{ video.createdAt.toDateString() }}</div>
+            <div>Author: <a [routerLink]="'/u/' + video.user.id">{{ video.user.name }}</a></div>
         </div>
 
         <div *ngIf="!auth.isAuthorized">

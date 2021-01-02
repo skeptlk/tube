@@ -10,14 +10,12 @@
             <clr-input-container>
                 <label>Name</label>
                 <input clrInput type="text" 
-                    formControlName="name" name="name" 
-                    [value]="user.name"/>
+                    formControlName="name" name="name" />
             </clr-input-container>
             <clr-input-container>
                 <label>Email</label>
                 <input clrInput type="email" 
-                    formControlName="email" name="email" 
-                    [value]="user.email"/>
+                    formControlName="email" name="email" />
             </clr-input-container>
             <button *ngIf="editProfileForm.touched" 
                 (click)="auth.logout()"

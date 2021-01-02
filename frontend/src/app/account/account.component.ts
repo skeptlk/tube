@@ -25,6 +25,10 @@ export class AccountComponent implements OnInit {
 
     ngOnInit(): void {
         this.user = this.auth.currentUserValue;
+        this.editProfileForm.patchValue({
+            name: this.user.name,
+            email: this.user.email
+        });
         this.vidService
             .getUserVideos(this.user.id)
             .subscribe(vids => {

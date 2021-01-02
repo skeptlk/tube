@@ -34,3 +34,13 @@ button {
         overflow: hidden;
     }
 }
+
+.router-outlet {
+    min-height: calc(100vh - 200px);
+}
+
+.footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+}

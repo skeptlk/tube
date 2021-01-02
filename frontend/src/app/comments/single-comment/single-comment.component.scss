@@ -14,11 +14,17 @@
             padding-left: 8px;
         }
     }
+    
+    .date {
+        border-color: transparent;
+        margin-left: -8px;
+    }
 
     .body {
         margin: 5px 0;
         font-size: 1.15em;
     }
+
     &:hover {
         &> .comment-actions { opacity: 1; }
     }

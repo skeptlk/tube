@@ -12,6 +12,7 @@ export class Video {
     dislikes: number;
     url: string;
     thumbnail: string;
+    createdAt: Date;
     
     constructor(base: any) {
         this.id =           base['id'];
@@ -25,5 +26,6 @@ export class Video {
         this.dislikes =     base['dislikes'];
         this.url =          base['url'];
         this.thumbnail =    base['thumbnail'];
+        this.createdAt =    new Date(base['createdAt']);
     }
 }

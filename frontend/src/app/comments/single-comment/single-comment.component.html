@@ -3,6 +3,9 @@
     <a [routerLink]="'/u/' + comment.user.id" class="label">
         {{ comment.user.name }}
     </a>
+    <span class="label date">
+        {{ comment.createdAt | dateAgo }}
+    </span>
     <div class="comment-actions">
         <a (click)="reply()" class="reply">Reply</a>
         <a (click)="deleteComm()" class="delete">Delete</a>
