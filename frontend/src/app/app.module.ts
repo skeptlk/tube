@@ -25,6 +25,7 @@ import { VideoOwnerControlsComponent } from './video-owner-controls/video-owner-
 import { CommentsComponent } from './comments/comments.component';
 import { SingleCommentComponent } from './comments/single-comment/single-comment.component';
 import { UserProfileComponent } from './user-profile/user-profile.component';
+import { AdminUsersListComponent } from './admin/admin-users-list/admin-users-list.component';
 
 
 @NgModule({
@@ -42,7 +43,8 @@ import { UserProfileComponent } from './user-profile/user-profile.component';
         VideoOwnerControlsComponent,
         CommentsComponent,
         SingleCommentComponent,
-        UserProfileComponent
+        UserProfileComponent,
+        AdminUsersListComponent
     ],
     imports: [
         BrowserModule,

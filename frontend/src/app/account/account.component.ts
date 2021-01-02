@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { AuthService, UserService, VideoService } from '../services';
 import { User, Video } from '../models';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 
 @Component({
     selector: 'account',
@@ -20,7 +21,8 @@ export class AccountComponent implements OnInit {
     constructor(
         public auth: AuthService,
         // private userService: UserService,
-        public vidService: VideoService
+        public vidService: VideoService,
+        private router: Router
     ) { }
 
     ngOnInit(): void {
@@ -34,6 +36,15 @@ export class AccountComponent implements OnInit {
             .subscribe(vids => {
                 this.myVideos = vids;
             });
+    }
+
+    logout() {
+        this.auth.logout();
+        this.router.navigate(['']);
+    }
+
+    editProfile() {
+        // ...
     }
 
 }

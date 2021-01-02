@@ -18,18 +18,14 @@
                     formControlName="email" name="email" />
             </clr-input-container>
             <button *ngIf="editProfileForm.touched" 
-                (click)="auth.logout()"
                 class="btn btn-primary float-right">
                 Save
             </button>
         </form>
     </div>
-
-    <div class="clr-col-8">
-    </div>
     
     <div class="clr-col-12">
-        <button (click)="auth.logout()"
+        <button (click)="logout()"
             class="btn btn-danger-outline logout-btn">
             Logout
         </button>

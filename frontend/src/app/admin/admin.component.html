@@ -1,1 +1,19 @@
-<p>This is an adimn panel</p>
+<div class="content-container">
+    <nav class="sidenav">
+        <section class="sidenav-content">
+            <a (click)="activeTab = 0" class="nav-link" [class.active]="activeTab === 0">
+                Users
+            </a>
+            <a (click)="activeTab = 1" class="nav-link" [class.active]="activeTab === 1">
+                Videos
+            </a>
+            <a (click)="activeTab = 2" class="nav-link" [class.active]="activeTab === 2">
+                Statistics
+            </a>
+        </section>
+    </nav>
+    <div class="content-area">
+        <admin-users-list *ngIf="activeTab === 0">
+        </admin-users-list>
+    </div>
+</div>

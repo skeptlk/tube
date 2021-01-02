@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,6 +122,12 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiDeleteCommentHandler).Methods("DELETE")
+
+	admin := router.PathPrefix("/admin").Subrouter()
+	admin.Use(app.jwtVerifyAdmin)
+	admin.HandleFunc("/user", app.apiAdminGetUsersHandler).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/user/{id}", app.apiAdminDeleteUsersHandler).Methods("DELETE", "OPTIONS")
+
 
 	// Static assets handler
 	// staticFs := http.FileServer(http.Dir("./static"))
@@ -300,11 +307,12 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 		return nil, fmt.Errorf("Invalid login credentials. Please try again")
 	}
 
-	// DO I NEED TO INCLUDE PASSWORD HERE? I THINK SO...
-	tk := &models.CustomClaims{
+	tk := &models.UserClaims{
 		UserID: user.ID,
 		Name:   user.Name,
 		Email:  user.Email,
+		Password: user.Password,
+		IsAdmin: user.IsAdmin,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expiresAt,
 		},
@@ -322,19 +330,18 @@ func (app *App) findUser(name, password string) (map[string]interface{}, error) 
 	return resp, nil
 }
 
-// MIDDLEWARE FOR AUTHENTICATION
+// MIDDLEWARE FOR USER AUTHENTICATION
 func (app *App) jwtVerify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		header = strings.TrimSpace(header)
-
 		if header == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Token is not provided"))
 			return
 		}
 
-		tk := &models.CustomClaims{}
+		tk := &models.UserClaims{}
 		_, err := jwt.ParseWithClaims(header, tk, func(token *jwt.Token) (interface{}, error) {
 			return []byte("secret"), nil
 		})
@@ -348,6 +355,38 @@ func (app *App) jwtVerify(next http.Handler) http.Handler {
 		}
 	})
 }
+
+// MIDDLEWARE FOR ADMIN AUTHENTICATION
+func (app *App) jwtVerifyAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		header = strings.TrimSpace(header)
+		if header == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Token is not provided"))
+			return
+		}
+
+		tk := &models.UserClaims{}
+		_, err := jwt.ParseWithClaims(header, tk, func(token *jwt.Token) (interface{}, error) {
+			return []byte("secret"), nil
+		})
+
+		if err == nil {
+			if tk.IsAdmin {
+				ctx := context.WithValue(r.Context(), "userID", tk.UserID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+			} else {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte("You don't have admin priveleges!"))
+			}
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Authentication error"))
+		}
+	})
+}
+
 
 // HTTP handler for /api/upload
 func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
@@ -840,6 +879,58 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 
 	json.NewEncoder(w).Encode(comments)
 }
+
+
+// HTTP handler for [GET] /admin/user
+func (app *App) apiAdminGetUsersHandler(w http.ResponseWriter, r *http.Request) {
+	var limit, offset int
+	limits, ok := r.URL.Query()["limit"]
+	if !ok || len(limits[0]) < 1 {
+		limit = 10
+	} else {
+		limit, _ = strconv.Atoi(limits[0])
+	}
+	offsets, ok := r.URL.Query()["offset"]
+	if !ok || len(offsets[0]) < 1 {
+		offset = 0
+	} else {
+		offset, _ = strconv.Atoi(offsets[0])
+	}
+
+
+	users := []models.User{}
+	app.DataBase.Limit(limit).Offset(offset).
+				 Find(&users)
+
+	var total int
+	app.DataBase.
+		Raw("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL").
+		Scan(&total)
+
+	var resp = map[string]interface{}{
+		"total": total, 
+		"offset": offset,
+		"count": len(users),
+		"users": users,
+	}
+	json.NewEncoder(w).Encode(resp);
+}
+
+// HTTP handler for [DELETE] /admin/user/id
+func (app *App) apiAdminDeleteUsersHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	log.Info(fmt.Sprintf("Deleting a user; id=%s", id))
+
+	user := &models.User{}
+	app.DataBase.Find(user, id)
+
+	app.DataBase.Delete(&user)
+}
+
+
+// HTTP handler for [GET] /admin/video
+// func (app *App) apiAdminGetVideosHandler(w http.ResponseWriter, r *http.Request) {
+
 
 // TODO: Make this a background job
 // Resize for lower quality options

@@ -6,11 +6,12 @@
             </a>
         </div>
         <div class="header-nav">
-            <a routerLink="/search" class="nav-link nav-text">Search</a>
             <a routerLink="/upload" class="nav-link nav-text">Upload</a>
+            <a *ngIf="auth.isAuthorized && auth.currentUserValue.isAdmin === 'true'" 
+                routerLink="/admin" class="nav-link nav-text">Admin</a>
         </div>
         <div class="header-actions">
-            <a *ngIf="auth.currentUserValue; else elseBlock"
+            <a *ngIf="auth.isAuthorized; else elseBlock"
                 routerLink="/account" 
                 class="nav-link nav-icon-text">
                 <clr-icon shape="user"></clr-icon>

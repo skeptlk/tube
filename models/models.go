@@ -14,8 +14,9 @@ type User struct {
 	Name string 				`json:"name"`
 	Email string 				`json:"email" gorm:"unique_index"`
 	Password string 			`json:"password"`
+	IsAdmin bool				`gorm:"default:false" json:"isAdmin,string"`
 
-	CreatedAt time.Time			`json:"-"`
+	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
@@ -42,22 +43,22 @@ type Video struct {
 
 // Like model
 type Like struct {
-	ID uint				`gorm:"primaryKey" json:"id,string,omitempty"`
-	UID uint			`json:"userId,string"`
-	VID uint			`json:"videoId,string"`
-	IsDislike bool		`gorm:"default:false" json:"isDislike,string"`
+	ID uint						`gorm:"primaryKey" json:"id,string,omitempty"`
+	UID uint					`json:"userId,string"`
+	VID uint					`json:"videoId,string"`
+	IsDislike bool				`gorm:"default:false" json:"isDislike,string"`
 }
 
 // Comment model
 type Comment struct {
-	ID uint				`gorm:"primaryKey" json:"id,string,omitempty"`
-	UserID uint			`json:"userId"`
-	User User			`json:"user"`
-	VideoID uint		`json:"videoId"`
-	ReplyTo null.Int	`json:"replyTo,omitempty"`
-	ReplyCount int 		`gorm:"-" json:"replyCount"`
-	Replies []Comment 	`gorm:"foreignKey:ReplyTo" json:"replies"`
-	Text string 		`json:"text"`
+	ID uint						`gorm:"primaryKey" json:"id,string,omitempty"`
+	UserID uint					`json:"userId"`
+	User User					`json:"user"`
+	VideoID uint				`json:"videoId"`
+	ReplyTo null.Int			`json:"replyTo,omitempty"`
+	ReplyCount int 				`gorm:"-" json:"replyCount"`
+	Replies []Comment 			`gorm:"foreignKey:ReplyTo" json:"replies"`
+	Text string 				`json:"text"`
 
 	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
@@ -69,10 +70,12 @@ type ErrResponse struct {
 	Error string `json:"error"`
 }
 
-// CustomClaims custom claims
-type CustomClaims struct {
+// UserClaims custom claims
+type UserClaims struct {
 	UserID uint
 	Name string
 	Email string
+	Password string
+	IsAdmin bool
 	jwt.StandardClaims
 }
