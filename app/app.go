@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -126,8 +127,9 @@ func NewApp(cfg *Config) (*App, error) {
 	admin := router.PathPrefix("/admin").Subrouter()
 	admin.Use(app.jwtVerifyAdmin)
 	admin.HandleFunc("/user", app.apiAdminGetUsersHandler).Methods("GET", "OPTIONS")
-	admin.HandleFunc("/user/{id}", app.apiAdminDeleteUsersHandler).Methods("DELETE", "OPTIONS")
-
+	admin.HandleFunc("/user/chart", app.adminGetUserChartHandler).Methods("GET", "OPTIONS")
+	admin.HandleFunc("/user/{id}", app.adminDeleteUserHandler).Methods("DELETE", "OPTIONS")
+	admin.HandleFunc("/video", app.apiAdminGetVideosHandler).Methods("GET", "OPTIONS")
 
 	// Static assets handler
 	// staticFs := http.FileServer(http.Dir("./static"))
@@ -515,7 +517,7 @@ func (app *App) apiDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 	uid := uid_ctx.(uint)
 
 	id := mux.Vars(r)["id"]
-	log.Info(fmt.Sprintf("Deleting a video; id=%s", id))
+	log.Info(fmt.Sprintf("Deleting a video; id = %s", id))
 
 	video := &models.Video{}
 	app.DataBase.Find(video, id)
@@ -883,21 +885,7 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 
 // HTTP handler for [GET] /admin/user
 func (app *App) apiAdminGetUsersHandler(w http.ResponseWriter, r *http.Request) {
-	var limit, offset int
-	limits, ok := r.URL.Query()["limit"]
-	if !ok || len(limits[0]) < 1 {
-		limit = 10
-	} else {
-		limit, _ = strconv.Atoi(limits[0])
-	}
-	offsets, ok := r.URL.Query()["offset"]
-	if !ok || len(offsets[0]) < 1 {
-		offset = 0
-	} else {
-		offset, _ = strconv.Atoi(offsets[0])
-	}
-
-
+	offset, limit := getOffsetAndLimit(r.URL.Query())
 	users := []models.User{}
 	app.DataBase.Limit(limit).Offset(offset).
 				 Find(&users)
@@ -916,10 +904,27 @@ func (app *App) apiAdminGetUsersHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(resp);
 }
 
+func getOffsetAndLimit(query url.Values) (int, int) {
+	var offset, limit int
+	offsets, ok := query["offset"]
+	if !ok || len(offsets[0]) < 1 {
+		offset = 0
+	} else {
+		offset, _ = strconv.Atoi(offsets[0])
+	}
+	limits, ok := query["limit"]
+	if !ok || len(limits[0]) < 1 {
+		limit = 10
+	} else {
+		limit, _ = strconv.Atoi(limits[0])
+	}
+	return offset, limit
+}
+
 // HTTP handler for [DELETE] /admin/user/id
-func (app *App) apiAdminDeleteUsersHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) adminDeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	log.Info(fmt.Sprintf("Deleting a user; id=%s", id))
+	log.Info(fmt.Sprintf("Deleting a user (as admin); id = %s", id))
 
 	user := &models.User{}
 	app.DataBase.Find(user, id)
@@ -927,9 +932,68 @@ func (app *App) apiAdminDeleteUsersHandler(w http.ResponseWriter, r *http.Reques
 	app.DataBase.Delete(&user)
 }
 
+// HTTP handler for [DELETE] /admin/video/id
+func (app *App) adminDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	log.Info(fmt.Sprintf("Deleting a video (as admin); id = %s", id))
+
+	video := &models.Video{}
+	app.DataBase.Find(video, id)
+
+	if err := os.Remove(video.URL); err != nil {
+		http.Error(w, "Error", http.StatusInternalServerError)
+		log.Error(err)
+		return
+	}
+	if err := os.Remove(video.ThumbnailURL); err != nil {
+		http.Error(w, "Error", http.StatusInternalServerError)
+		log.Error(err)
+		return
+	}
+
+	app.DataBase.Delete(&video)
+
+}
+
+// HTTP handler for [GET] /admin/user/chart
+func (app *App) adminGetUserChartHandler(w http.ResponseWriter, r *http.Request) {
+	q := "SELECT *, " +
+		 "(SELECT IFNULL(SUM(views), 0) FROM videos WHERE user_id = users.id) AS total_views, " +
+		 "(SELECT COUNT(*) FROM videos WHERE user_id = users.id) AS num_videos " +
+		 "FROM users WHERE deleted_at IS NULL ORDER BY total_views DESC LIMIT 10;"
+
+	users := []models.UserStat{}
+	res := app.DataBase.Raw(q).Scan(&users)
+	if res.Error != nil {
+		log.Error(res.Error)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(users)
+}
 
 // HTTP handler for [GET] /admin/video
-// func (app *App) apiAdminGetVideosHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) apiAdminGetVideosHandler(w http.ResponseWriter, r *http.Request) {
+	offset, limit := getOffsetAndLimit(r.URL.Query())
+	videos := []models.Video{}
+	app.DataBase.Limit(limit).Offset(offset).
+				 Preload("User").
+				 Find(&videos)
+
+	var total int
+	app.DataBase.
+		Raw("SELECT COUNT(*) FROM videos WHERE deleted_at IS NULL").
+		Scan(&total)
+
+	var resp = map[string]interface{}{
+		"total": total, 
+		"offset": offset,
+		"count": len(videos),
+		"videos": videos,
+	}
+	json.NewEncoder(w).Encode(resp);
+}
 
 
 // TODO: Make this a background job

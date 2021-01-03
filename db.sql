@@ -56,3 +56,9 @@ ALTER TABLE comments ADD CONSTRAINT fk_comm_user_id   FOREIGN KEY (user_id)  REF
 ALTER TABLE comments ADD CONSTRAINT fk_comm_repl_comm FOREIGN KEY (reply_to) REFERENCES comments(id) ON DELETE CASCADE;
 
 
+
+
+-- SELECT id, 
+-- (SELECT SUM(views) FROM videos WHERE user_id = users.id) AS total_views, 
+-- (SELECT COUNT(*) FROM videos WHERE user_id=users.id) AS num_videos 
+-- FROM users WHERE deleted_at IS NULL;

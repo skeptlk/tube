@@ -26,6 +26,9 @@ import { CommentsComponent } from './comments/comments.component';
 import { SingleCommentComponent } from './comments/single-comment/single-comment.component';
 import { UserProfileComponent } from './user-profile/user-profile.component';
 import { AdminUsersListComponent } from './admin/admin-users-list/admin-users-list.component';
+import { AdminVideosListComponent } from './admin/admin-videos-list/admin-videos-list.component';
+import { AdminUsersChartComponent } from './admin/admin-users-chart/admin-users-chart.component';
+import { BestVideosComponent } from './best-videos/best-videos.component';
 
 
 @NgModule({
@@ -44,7 +47,10 @@ import { AdminUsersListComponent } from './admin/admin-users-list/admin-users-li
         CommentsComponent,
         SingleCommentComponent,
         UserProfileComponent,
-        AdminUsersListComponent
+        AdminUsersListComponent,
+        AdminVideosListComponent,
+        AdminUsersChartComponent,
+        BestVideosComponent
     ],
     imports: [
         BrowserModule,

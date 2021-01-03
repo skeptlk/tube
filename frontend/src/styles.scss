@@ -44,3 +44,11 @@ button {
     padding: 20px;
     text-align: center;
 }
+
+header .header-nav .nav-link {
+    padding: .9rem .5rem !important;
+}
+
+.header .header-nav .nav-link.nav-icon-text clr-icon {
+    margin-left: 0.5rem;
+}

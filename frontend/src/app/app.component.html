@@ -6,7 +6,20 @@
             </a>
         </div>
         <div class="header-nav">
-            <a routerLink="/upload" class="nav-link nav-text">Upload</a>
+            <a *ngIf="auth.isAuthorized; else elseBlock"
+                routerLink="/best" 
+                class="nav-link nav-icon-text">
+                <clr-icon shape="star" size="20">
+                </clr-icon>
+                <span class="nav-text">Best</span>
+            </a>
+            <a *ngIf="auth.isAuthorized"
+                routerLink="/upload" 
+                class="nav-link nav-icon-text">
+                <clr-icon shape="upload" size="20">
+                </clr-icon>
+                <span class="nav-text">Upload</span>
+            </a>
             <a *ngIf="auth.isAuthorized && auth.currentUserValue.isAdmin === 'true'" 
                 routerLink="/admin" class="nav-link nav-text">Admin</a>
         </div>

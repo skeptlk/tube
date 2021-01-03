@@ -1,9 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-
-import { User, Video } from '../models';
+import { User, UserStats, Video } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -31,13 +29,21 @@ export class AdminService {
         return this.http
             .get<any>(`${this.BASE_URL}/video/?offset=${offset}&limit=${limit}`)
             .pipe(map(resp => {
-                resp.videos = resp.users.map(vid => new Video(vid));
+                resp.videos = resp.videos.map(vid => new Video(vid));
                 return resp;
             }));
     }
 
-    public deleteVideo() {
+    public deleteVideo(id: number) {
+        return this.http
+            .delete<any>(`${this.BASE_URL}/video/${id}`)
+            .pipe();
+    }
 
+    public getUsersChart() {
+        return this.http
+            .get<any>(`${this.BASE_URL}/user/chart/`)
+            .pipe(map(resp => resp.map(u => new UserStats(u))));
     }
 
 }

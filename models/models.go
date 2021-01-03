@@ -21,6 +21,13 @@ type User struct {
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
 }
 
+// UserStat user statistics
+type UserStat struct {
+	User
+	TotalViews int				`json:"totalViews"`
+	NumVideos int				`json:"numVideos"`
+}
+
 // Video model
 type Video struct {
 	ID uint						`gorm:"primaryKey" json:"id"`

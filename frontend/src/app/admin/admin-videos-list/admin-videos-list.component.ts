@@ -1,14 +1,13 @@
 import { Component, OnInit } from '@angular/core';
-import { User } from '../../models';
-import { AdminService } from './../../services';
+import { User, Video } from 'src/app/models';
+import { AdminService } from 'src/app/services';
 
 @Component({
-    selector: 'admin-users-list',
-    templateUrl: './admin-users-list.component.html',
+    selector: 'admin-videos-list',
+    templateUrl: './admin-videos-list.component.html'
 })
-export class AdminUsersListComponent implements OnInit {
-
-    users: User[] = [];
+export class AdminVideosListComponent implements OnInit {
+    videos: Video[] = [];
     pages: number = 1;
     currentPage: number = 0;
     total: number;
@@ -19,9 +18,11 @@ export class AdminUsersListComponent implements OnInit {
 
     ngOnInit(): void {
         this.adminService
-            .getUsers(0, this.pageSize)
+            .getVideos(0, this.pageSize)
             .subscribe(resp => { 
-                this.users = resp.users; 
+                console.log("Resp: ", resp);
+                
+                this.videos = resp.videos; 
                 this.total = resp.total;
                 this.pages = Math.ceil(resp.total / this.pageSize);
             });
@@ -32,12 +33,11 @@ export class AdminUsersListComponent implements OnInit {
         this.currentPage = page;
         this.adminService
             .getUsers(page*limit, limit)
-            .subscribe(resp => { this.users = resp.users; });
+            .subscribe(resp => { this.videos = resp.videos; });
     }
 
-    async deleteUser(id: number) {
-        await this.adminService.deleteUser(id).toPromise();
+    async deleteVideo(id: number) {
+        await this.adminService.deleteVideo(id).toPromise();
         this.switchPage(this.currentPage); // reload
     }
-
 }
