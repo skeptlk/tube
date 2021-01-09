@@ -123,6 +123,10 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiDeleteCommentHandler).Methods("DELETE")
+	// api.HandleFunc("/category", app.apiGetCategoriesHandler).Methods("GET", "OPTIONS")
+	// api.HandleFunc("/category", app.apiCreateCategorysHandler).Methods("POST")
+	// api.HandleFunc("/category/{id}", app.apiUpdateCategoryHandler).Methods("PUT", "OPTIONS")
+	// api.HandleFunc("/category/{id}", app.apiDeleteCategoryHandler).Methods("DELETE")
 
 	admin := router.PathPrefix("/admin").Subrouter()
 	admin.Use(app.jwtVerifyAdmin)
@@ -215,6 +219,24 @@ func (app *App) render(name string, w http.ResponseWriter, ctx interface{}) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// retirns pagunation offset and limit from url parameters 
+func getOffsetAndLimit(query url.Values) (int, int) {
+	var offset, limit int
+	offsets, ok := query["offset"]
+	if !ok || len(offsets[0]) < 1 {
+		offset = 0
+	} else {
+		offset, _ = strconv.Atoi(offsets[0])
+	}
+	limits, ok := query["limit"]
+	if !ok || len(limits[0]) < 1 {
+		limit = 10
+	} else {
+		limit, _ = strconv.Atoi(limits[0])
+	}
+	return offset, limit
 }
 
 // HTTP handler for /
@@ -584,10 +606,13 @@ func (app *App) getVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	log.Printf("/v/%s", id)
-
 	video := &models.Video{}
-	app.DataBase.First(video, id)
+	video.Categories = []models.VideoCategory{}
+	// NOTE: i should rewite this relation
+	app.DataBase.
+		Preload("Categories").
+		Preload("Categories.Category").
+		First(video, id)
 
 	if video.ID > 0 {
 		app.DataBase.First(&video.User, video.UserID)
@@ -639,8 +664,6 @@ func (app *App) getUserVideosHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(videos)
 }
-
-
 
 func (app *App) apiLikeHandler(w http.ResponseWriter, r *http.Request) {
 	vID := mux.Vars(r)["id"]
@@ -882,7 +905,6 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(comments)
 }
 
-
 // HTTP handler for [GET] /admin/user
 func (app *App) apiAdminGetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	offset, limit := getOffsetAndLimit(r.URL.Query())
@@ -902,23 +924,6 @@ func (app *App) apiAdminGetUsersHandler(w http.ResponseWriter, r *http.Request) 
 		"users": users,
 	}
 	json.NewEncoder(w).Encode(resp);
-}
-
-func getOffsetAndLimit(query url.Values) (int, int) {
-	var offset, limit int
-	offsets, ok := query["offset"]
-	if !ok || len(offsets[0]) < 1 {
-		offset = 0
-	} else {
-		offset, _ = strconv.Atoi(offsets[0])
-	}
-	limits, ok := query["limit"]
-	if !ok || len(limits[0]) < 1 {
-		limit = 10
-	} else {
-		limit, _ = strconv.Atoi(limits[0])
-	}
-	return offset, limit
 }
 
 // HTTP handler for [DELETE] /admin/user/id
@@ -952,8 +957,14 @@ func (app *App) adminDeleteVideoHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	app.DataBase.Delete(&video)
-
 }
+
+// HTTP handler for [GET] /api/video/best
+func (app *App) apiGetBestVideosHandler(w http.ResponseWriter, r *http.Request) {
+	videos := &models.Video{}
+	app.DataBase.Scan(&videos)
+}
+
 
 // HTTP handler for [GET] /admin/user/chart
 func (app *App) adminGetUserChartHandler(w http.ResponseWriter, r *http.Request) {

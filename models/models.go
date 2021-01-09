@@ -43,9 +43,25 @@ type Video struct {
 	URL string					`json:"url"`
 	ThumbnailURL string			`json:"thumbnail"`
 
+	Categories []VideoCategory 	`gorm:"foreignKey:VID" json:"categories"`
+
 	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
 	DeletedAt gorm.DeletedAt 	`gorm:"index" json:"-"`
+}
+
+// VideoCategory model
+type VideoCategory struct {
+	ID uint						`gorm:"primaryKey" json:"id,string,omitempty"`
+	VID uint					`json:"videoId,string"`
+	CID uint					`json:"categoryId,string"`
+	Category Category 			`gorm:"foreignKey:ID;references:CID" json:"category"`
+}
+
+// Category model
+type Category struct {
+	ID uint						`gorm:"primaryKey" json:"id,string,omitempty"`
+	Title string 				`gorm:"unique" json:"title"`
 }
 
 // Like model

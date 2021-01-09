@@ -1,1 +1,12 @@
-<p>best-videos works!</p>
+
+<table class="table">
+    <tr *ngFor="let video of videos">
+
+        <td>
+            <div class="card-img"
+                [ngStyle]="{ backgroundImage: 'url(' + vidService.BASE_URL + '/' + video.thumbnail + ')' }">
+            </div>
+        </td>
+
+    </tr>
+</table>

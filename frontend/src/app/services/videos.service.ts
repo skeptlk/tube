@@ -73,5 +73,11 @@ export class VideoService {
             );
     }
 
-}
+    public getBestVideos() {
+        return this.http.get<any>(`${this.BASE_URL}/api/video/best`)
+            .pipe(
+                map(resp => resp.map(vid => new Video(vid)))
+            );
+    }
 
+}

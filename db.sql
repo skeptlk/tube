@@ -56,6 +56,21 @@ ALTER TABLE comments ADD CONSTRAINT fk_comm_user_id   FOREIGN KEY (user_id)  REF
 ALTER TABLE comments ADD CONSTRAINT fk_comm_repl_comm FOREIGN KEY (reply_to) REFERENCES comments(id) ON DELETE CASCADE;
 
 
+CREATE TABLE `video_categories` (
+    `id` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `c_id` int NOT NULL,
+    `v_id` int NOT NULL
+);
+
+CREATE TABLE `categories` (
+    `id` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `title` varchar(255) NOT NULL
+);
+
+ALTER TABLE video_categories ADD CONSTRAINT fk_video_categories_categ_id  FOREIGN KEY (c_id) REFERENCES videos(id) ON DELETE CASCADE;
+ALTER TABLE video_categories ADD CONSTRAINT fk_video_categories_video_id  FOREIGN KEY (v_id) REFERENCES categories(id) ON DELETE CASCADE;
+
+
 
 
 -- SELECT id, 

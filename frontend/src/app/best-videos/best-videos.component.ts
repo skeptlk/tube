@@ -1,4 +1,6 @@
 import { Component, OnInit } from '@angular/core';
+import { Video } from '../models';
+import { VideoService } from '../services';
 
 @Component({
     selector: 'best-videos',
@@ -7,7 +9,10 @@ import { Component, OnInit } from '@angular/core';
 })
 export class BestVideosComponent implements OnInit {
 
-    constructor() { }
+    videos: Video[] = [];
+
+    constructor(public vidService: VideoService) 
+    {  }
 
     ngOnInit(): void {
 
