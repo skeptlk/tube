@@ -11,6 +11,7 @@ import { Video } from '../models';
 export class VideoComponent implements OnInit {
 
     video: Video;
+    categories: string;
     id: number;
     showOwnerControls: boolean;
     isLiked: boolean;
@@ -27,6 +28,7 @@ export class VideoComponent implements OnInit {
         this.videoService.getInfo(this.id)
             .subscribe(vid => {
                 this.video = vid;
+                this.categories = this.video.categories.map(c => c.title).join(', ');
                 this.showOwnerControls = (vid.userId === this.auth.currentUserValue?.id);
             });
         if (this.auth.isAuthorized) {

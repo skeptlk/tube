@@ -1,7 +1,7 @@
 import { HttpClient } from "@angular/common/http";
 import { Injectable } from "@angular/core";
 import { map } from "rxjs/operators";
-import { Video } from "../models";
+import { Video, Category } from "../models";
 
 @Injectable({ providedIn: 'root' })
 export class VideoService {
@@ -77,6 +77,13 @@ export class VideoService {
         return this.http.get<any>(`${this.BASE_URL}/api/video/best`)
             .pipe(
                 map(resp => resp.map(vid => new Video(vid)))
+            );
+    }
+
+    public getAllCategories() {
+        return this.http.get<any>(`${this.BASE_URL}/api/category`)
+            .pipe(
+                map(resp => resp.map(cat => new Category(cat)))
             );
     }
 

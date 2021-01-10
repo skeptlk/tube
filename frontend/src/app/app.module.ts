@@ -29,6 +29,8 @@ import { AdminUsersListComponent } from './admin/admin-users-list/admin-users-li
 import { AdminVideosListComponent } from './admin/admin-videos-list/admin-videos-list.component';
 import { AdminUsersChartComponent } from './admin/admin-users-chart/admin-users-chart.component';
 import { BestVideosComponent } from './best-videos/best-videos.component';
+import { NgSelectModule } from '@ng-select/ng-select';
+import { VideoEditComponent } from './video/video-edit/video-edit.component';
 
 
 @NgModule({
@@ -50,7 +52,8 @@ import { BestVideosComponent } from './best-videos/best-videos.component';
         AdminUsersListComponent,
         AdminVideosListComponent,
         AdminUsersChartComponent,
-        BestVideosComponent
+        BestVideosComponent,
+        VideoEditComponent
     ],
     imports: [
         BrowserModule,
@@ -59,7 +62,8 @@ import { BestVideosComponent } from './best-videos/best-videos.component';
         ClarityModule,
         BrowserAnimationsModule,
         ReactiveFormsModule,
-        FormsModule
+        FormsModule,
+        NgSelectModule
     ],
     providers: [
         { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },

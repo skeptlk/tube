@@ -1,3 +1,4 @@
+import { Category } from "./category";
 import { User } from "./user";
 
 export class Video {
@@ -12,6 +13,7 @@ export class Video {
     dislikes: number;
     url: string;
     thumbnail: string;
+    categories: Category[] = [];
     createdAt: Date;
     
     constructor(base: any) {
@@ -27,5 +29,8 @@ export class Video {
         this.url =          base['url'];
         this.thumbnail =    base['thumbnail'];
         this.createdAt =    new Date(base['createdAt']);
+        if (base['categories']) {
+            this.categories = base['categories'].map(c => new Category(c.category));
+        }
     }
 }

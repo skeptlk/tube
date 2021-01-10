@@ -115,7 +115,8 @@ func NewApp(cfg *Config) (*App, error) {
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(app.jwtVerify)
 	api.HandleFunc("/video", app.apiUploadVideoHandler).Methods("POST", "OPTIONS")
-	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/video/{id}", app.apiUpdateVideoInfoHandler).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/video/{id}", app.apiDeleteVideoHandler).Methods("DELETE")
 	api.HandleFunc("/video/{id}/comments", app.apiGetVideoCommentsHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/like/{id}", app.apiLikeHandler).Methods("POST", "DELETE", "OPTIONS")
 	api.HandleFunc("/like/{id}", app.apiCheckLiked).Methods("GET")
@@ -123,7 +124,7 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/comment", app.apiCreateCommentHandler).Methods("POST", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiDeleteCommentHandler).Methods("DELETE")
-	// api.HandleFunc("/category", app.apiGetCategoriesHandler).Methods("GET", "OPTIONS")
+	api.HandleFunc("/category", app.apiGetCategoriesHandler).Methods("GET", "OPTIONS")
 	// api.HandleFunc("/category", app.apiCreateCategorysHandler).Methods("POST")
 	// api.HandleFunc("/category/{id}", app.apiUpdateCategoryHandler).Methods("PUT", "OPTIONS")
 	// api.HandleFunc("/category/{id}", app.apiDeleteCategoryHandler).Methods("DELETE")
@@ -462,7 +463,19 @@ func (app *App) apiUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	// add video categories
+	log.Info(r.FormValue("categoryIds"));
+	catIds := make([]uint, 0)
+	json.Unmarshal([]byte(r.FormValue("categoryIds")), &catIds)
+	if len(catIds) > 0 {
+		for _, cid := range catIds {
+			vcat := &models.VideoCategory{}
+			vcat.VID = vid.ID
+			vcat.CID = cid;
+			app.DataBase.Save(vcat);
+		}
+	}
+	
 	json.NewEncoder(w).Encode(vid)
 	log.Info(fmt.Sprintf("New upload: Id=%d; Title: \"%s\"", vid.ID, vid.Title))
 
@@ -534,6 +547,7 @@ func getVideoDuration(filename string) (int, error) {
 	return dur, nil
 }
 
+// HTTP handler for [DELETE] /api/video/id
 func (app *App) apiDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 	uid_ctx := r.Context().Value("userID")
 	uid := uid_ctx.(uint)
@@ -563,6 +577,60 @@ func (app *App) apiDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	app.DataBase.Delete(&video)
 }
+
+// HTTP handler for [PUT] /api/video/id
+func (app *App) apiUpdateVideoInfoHandler(w http.ResponseWriter, r *http.Request) {
+	uid_ctx := r.Context().Value("userID")
+	uid := uid_ctx.(uint)
+
+	id := mux.Vars(r)["id"]
+	log.Info(fmt.Sprintf("Updating video info; id = %s", id))
+
+	upd := &models.Video{}
+	json.NewDecoder(r.Body).Decode(upd)
+
+	vid := &models.Video{}
+	app.DataBase.Find(vid, id)
+
+	if upd.UserID != uid {
+		http.Error(w, "You are not the owner of this video", http.StatusForbidden)
+		log.Error("Update not permitted")
+		return
+	}
+
+	vid.Title = upd.Title
+	vid.Description = upd.Description
+
+	res := app.DataBase.Save(vid)
+	if res.Error != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
+
+	// delete existing categories
+	categories := []models.VideoCategory{}
+	res = app.DataBase.Where("v_id = ?", vid.ID).Delete(categories)
+	if res.Error != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
+
+	// add updated categories
+	log.Info(r.FormValue("categoryIds"));
+	if len(upd.CategoryIds) > 0 {
+		for _, cid := range upd.CategoryIds {
+			vcat := &models.VideoCategory{}
+			vcat.VID = vid.ID
+			vcat.CID = cid;
+			app.DataBase.Save(vcat);
+		}
+	}
+
+	json.NewEncoder(w).Encode(vid)
+}
+
 
 // HTTP handler for /v/list
 func (app *App) listVideosHandler(w http.ResponseWriter, r *http.Request) {
@@ -903,6 +971,21 @@ func (app *App) apiGetVideoCommentsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	json.NewEncoder(w).Encode(comments)
+}
+
+// HTTP handler for [GET] /api/category
+func (app *App) apiGetCategoriesHandler(w http.ResponseWriter, r *http.Request) {
+	categs := []models.Category{}
+	res := app.DataBase.
+		Find(&categs)
+
+	if res.Error != nil {
+		http.Error(w, res.Error.Error(), http.StatusInternalServerError)
+		log.Error(res.Error)
+		return
+	}
+
+	json.NewEncoder(w).Encode(categs)
 }
 
 // HTTP handler for [GET] /admin/user

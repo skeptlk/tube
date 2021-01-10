@@ -52,3 +52,12 @@ header .header-nav .nav-link {
 .header .header-nav .nav-link.nav-icon-text clr-icon {
     margin-left: 0.5rem;
 }
+
+.ng-dropdown-panel {
+    background: #fff;
+    border: 1px solid #dedede;
+    border-radius: 5px;
+    .ng-dropdown-panel-items .ng-option {
+        padding: 5px;
+    }
+}

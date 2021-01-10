@@ -23,6 +23,8 @@ export class ErrorInterceptor implements HttpInterceptor {
             }
             if (err.status !== 200) {
                 const error = err.error?.message || err.statusText;
+                console.log("Error intercepted!");
+                
                 return throwError(error);
             }
         }))

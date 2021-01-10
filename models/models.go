@@ -44,6 +44,8 @@ type Video struct {
 	ThumbnailURL string			`json:"thumbnail"`
 
 	Categories []VideoCategory 	`gorm:"foreignKey:VID" json:"categories"`
+	// used only when editing video
+	CategoryIds []uint 			`gorm:"-" json:"categoryIds"`
 
 	CreatedAt time.Time			`json:"createdAt"`
 	UpdatedAt time.Time			`json:"-"`
