@@ -29,9 +29,4 @@ export class VideoOwnerControlsComponent {
                 })
         }
     }
-
-    editVideo() {
-
-    }
-
 }

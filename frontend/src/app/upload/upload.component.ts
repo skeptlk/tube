@@ -19,7 +19,6 @@ export class UploadComponent implements OnInit {
 
     video: File = null;
     categories: Category[] = [];
-    selectedCategories: Category[] = [];
     uploadForm = new FormGroup({
         title: new FormControl('', [Validators.required]),
         description: new FormControl(''),

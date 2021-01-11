@@ -10,6 +10,7 @@ import { SignupComponent } from './signup/signup.component';
 import { VideoComponent } from './video/video.component';
 import { UserProfileComponent } from './user-profile/user-profile.component';
 import { BestVideosComponent } from './best-videos/best-videos.component';
+import { VideoEditComponent } from './video/video-edit/video-edit.component';
 
 
 const routes: Routes = [
@@ -21,6 +22,7 @@ const routes: Routes = [
     { path: 'login', component: LoginComponent },
     { path: 'signup', component: SignupComponent },
     { path: 'v/:id', component: VideoComponent },
+    { path: 'v/:id/edit', component: VideoEditComponent, canActivate: [AuthGuard] },
     { path: 'u/:id', component: UserProfileComponent },
     { path: '**', redirectTo: '' }
 ];

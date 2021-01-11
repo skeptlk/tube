@@ -14,6 +14,12 @@ export class VideoService {
         return this.http.post<any>(this.BASE_URL + `/api/video`, data).pipe();
     }
 
+    public update(video: Video) {
+        return this.http
+            .put<any>(`${this.BASE_URL}/api/video/${video.id}`, video)
+            .pipe(map(resp => new Video(resp)));
+    }
+
     public delete(id: number) {
         return this.http.delete(this.BASE_URL + '/api/video/' + id).pipe();
     }
@@ -74,7 +80,14 @@ export class VideoService {
     }
 
     public getBestVideos() {
-        return this.http.get<any>(`${this.BASE_URL}/api/video/best`)
+        return this.http.get<any>(`${this.BASE_URL}/v/best`)
+            .pipe(
+                map(resp => resp.map(vid => new Video(vid)))
+            );
+    }
+
+    public getVideosInCategory(cat_id: number) {
+        return this.http.get<any>(`${this.BASE_URL}/v/list?category=${cat_id}`)
             .pipe(
                 map(resp => resp.map(vid => new Video(vid)))
             );

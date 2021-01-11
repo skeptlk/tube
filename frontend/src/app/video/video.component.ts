@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService, VideoService } from '../services';
 import { Video } from '../models';
 
@@ -11,6 +11,7 @@ import { Video } from '../models';
 export class VideoComponent implements OnInit {
 
     video: Video;
+    recommended: Video[] = [];
     categories: string;
     id: number;
     showOwnerControls: boolean;
@@ -20,16 +21,32 @@ export class VideoComponent implements OnInit {
     constructor(
         public videoService: VideoService,
         public auth: AuthService,
-        private route: ActivatedRoute
+        private route: ActivatedRoute,
+        private router: Router
     ) { }
 
     ngOnInit(): void {
+        this.fetchData();
+
+        this.router.events.subscribe(() => {
+            this.fetchData();
+        })
+    }
+    
+
+    private fetchData() {
         this.id = +this.route.snapshot.paramMap.get('id');
         this.videoService.getInfo(this.id)
             .subscribe(vid => {
                 this.video = vid;
                 this.categories = this.video.categories.map(c => c.title).join(', ');
                 this.showOwnerControls = (vid.userId === this.auth.currentUserValue?.id);
+                if (vid.categories.length > 0) {
+                    this.videoService
+                        .getVideosInCategory(vid.categories[0].id)
+                        .subscribe((vids: Video[]) => this.recommended = vids.filter(v => v.id !== this.video.id)
+                        );
+                }
             });
         if (this.auth.isAuthorized) {
             this.videoService.likeInfo(this.id)

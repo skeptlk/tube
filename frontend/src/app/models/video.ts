@@ -15,6 +15,7 @@ export class Video {
     thumbnail: string;
     categories: Category[] = [];
     createdAt: Date;
+    categoryIds: number[];
     
     constructor(base: any) {
         this.id =           base['id'];

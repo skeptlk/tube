@@ -2,51 +2,40 @@
     <div class="clr-col-lg-6 clr-offset-lg-3 clr-col-12">
         <div class="card">
             <div class="card-block">
-                <form clrForm [formGroup]="uploadForm">
+                <form clrForm [formGroup]="form">
                     <clr-input-container>
-                        <label>Title</label>
+                        <label>
+                            Title
+                        </label>
                         <input clrInput type="text" formControlName="title" name="title" />
                     </clr-input-container>
                     <clr-input-container>
-                        <label>Description</label>
+                        <label>
+                            Description
+                        </label>
                         <input clrInput type="text" formControlName="description" name="description" />
                     </clr-input-container>
+                </form>
+                <div>
                     <clr-control-container>
-                        <label>Categories</label>
-                        <ng-select clrControl 
+                        <label>
+                            Categories
+                        </label>
+                        <ng-select clrInput
                             [multiple]="true" 
                             bindValue="id" 
-                            formControlName="categories"
+                            bindLabel="title"
+                            [(ngModel)]="selectedCategories"
                             >
                             <ng-option *ngFor="let cat of categories" [value]="cat.id">
                                 {{cat.title}}
                             </ng-option>
                         </ng-select>
                     </clr-control-container>
-
-                    <input type="file" 
-                        #fileInp class="not-visible"
-                        (change)="onFileSelected($event.target.files)" />
-
-                    <div *ngIf="!video" class="dragzone" 
-                        [ngClass]="{ active: dragActive }"
-                        (dragover)="dragActive = true" 
-                        (dragleave)="dragActive = false" 
-                        (drop)="dropHandler($event)"
-                        (click)="selectFile()">
-                        <clr-icon shape="video-gallery"></clr-icon>
-                        <h4>Select your file or drop it here</h4>
-                    </div>
-                    <div *ngIf="video">
-                        <span class="selected-file">
-                            {{ video?.name }}
-                            <clr-icon shape="video-gallery"></clr-icon>
-                        </span>
-                    </div>
-                </form>
+                </div>
             </div>
             <div class="card-footer text-center">
-                <button (click)="submit($event)" class="btn btn-primary">Upload</button>
+                <button (click)="submit($event)" class="btn btn-primary">Update</button>
             </div>
         </div>
     </div>

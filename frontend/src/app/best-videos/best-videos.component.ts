@@ -15,7 +15,9 @@ export class BestVideosComponent implements OnInit {
     {  }
 
     ngOnInit(): void {
-
+        this.vidService.getBestVideos().subscribe(vids => {
+            this.videos = vids;
+        });
     }
 
 }

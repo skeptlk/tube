@@ -48,11 +48,26 @@
             [videoId]="video.id"
             [userId]="auth.currentUserValue.id">
         </video-comments>
-        
     </div>
     <div class="clr-col-3">
         <h3>Check out other cool vids:</h3>
-        <p>Nothing here yet...</p>
+        <div *ngFor="let vid of recommended" class="video-card">
+            <a [routerLink]="['/v',vid.id]" class="card clickable">
+                <div class="card-img"
+                    [ngStyle]="{ backgroundImage: 'url(' + videoService.BASE_URL + '/' + vid.thumbnail + ')' }">
+                </div>
+                <div class="card-block">
+                    <p class="card-text">
+                        {{ vid.title }}
+                    </p>
+                    <div>
+                        <span class="label">{{ vid.user?.name }}</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <p *ngIf="recommended.length === 0">Nothing here yet...</p>
     </div>
 </div>
 

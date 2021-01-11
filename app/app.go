@@ -102,7 +102,8 @@ func NewApp(cfg *Config) (*App, error) {
 	// Setup Router
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", app.indexHandler).Methods("GET", "OPTIONS")
-	router.HandleFunc("/v/list", app.listVideosHandler).Methods("GET")
+	router.HandleFunc("/v/list", app.listVideosHandler).Methods("GET", "OPTIONS")
+	router.HandleFunc("/v/best", app.bestVideosHandler).Methods("GET")
 	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
 	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/user/{id}", app.getProfileHandler).Methods("GET", "OPTIONS")
@@ -222,7 +223,7 @@ func (app *App) render(name string, w http.ResponseWriter, ctx interface{}) {
 	}
 }
 
-// retirns pagunation offset and limit from url parameters 
+// returns pagunation offset and limit from url parameters 
 func getOffsetAndLimit(query url.Values) (int, int) {
 	var offset, limit int
 	offsets, ok := query["offset"]
@@ -238,6 +239,16 @@ func getOffsetAndLimit(query url.Values) (int, int) {
 		limit, _ = strconv.Atoi(limits[0])
 	}
 	return offset, limit
+}
+
+// returns category id from url parameters 
+func getCategory(query url.Values) int {
+	category := 0
+	_categ, ok := query["category"]
+	if ok && len(_categ) > 0 {
+		category, _ = strconv.Atoi(_categ[0])
+	}
+	return category
 }
 
 // HTTP handler for /
@@ -634,12 +645,59 @@ func (app *App) apiUpdateVideoInfoHandler(w http.ResponseWriter, r *http.Request
 
 // HTTP handler for /v/list
 func (app *App) listVideosHandler(w http.ResponseWriter, r *http.Request) {
-	var videos []models.Video
-	app.DataBase.Preload("User").Find(&videos)
+	category := getCategory(r.URL.Query())	
+	videos := []models.Video{}
+	if category > 0 {
+		videos = videosByCategory(category, app.DataBase)
+	} else {
+		videos = getAllVideos(app.DataBase)
+	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(videos)
 }
+
+func videosByCategory (id int, db *gorm.DB) []models.Video  {
+	vids := make([]uint, 0)
+	db.Raw("SELECT v_id FROM video_categories WHERE c_id = ?", id).
+	   Scan(&vids)
+	
+	videos := []models.Video{}
+	db.Preload("Categories").
+		Preload("Categories.Category").
+		Preload("User").
+		Find(&videos, vids)
+
+	return videos
+}
+
+func getAllVideos (db *gorm.DB) []models.Video  {
+	videos := []models.Video{}
+	db.Preload("Categories").
+		Preload("Categories.Category").
+		Preload("User").
+		Find(&videos)
+
+	return videos
+}
+
+// HTTP handler for /v/best
+func (app *App) bestVideosHandler(w http.ResponseWriter, r *http.Request) {
+	var videos []models.Video
+	for _, v := range videos {
+		v.Categories = []models.VideoCategory{}
+	}
+	app.DataBase.
+		Preload("Categories").
+		Preload("Categories.Category").
+		Preload("User").
+		Order("views desc").
+		Limit(10).
+		Find(&videos)
+
+	json.NewEncoder(w).Encode(videos)
+}
+
+
 
 // HTTP handler for /v/id.mp4
 func (app *App) getVideoHandler(w http.ResponseWriter, r *http.Request) {
@@ -1041,13 +1099,6 @@ func (app *App) adminDeleteVideoHandler(w http.ResponseWriter, r *http.Request) 
 
 	app.DataBase.Delete(&video)
 }
-
-// HTTP handler for [GET] /api/video/best
-func (app *App) apiGetBestVideosHandler(w http.ResponseWriter, r *http.Request) {
-	videos := &models.Video{}
-	app.DataBase.Scan(&videos)
-}
-
 
 // HTTP handler for [GET] /admin/user/chart
 func (app *App) adminGetUserChartHandler(w http.ResponseWriter, r *http.Request) {

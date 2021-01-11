@@ -1,12 +1,20 @@
 
 <table class="table">
-    <tr *ngFor="let video of videos">
 
-        <td>
-            <div class="card-img"
-                [ngStyle]="{ backgroundImage: 'url(' + vidService.BASE_URL + '/' + video.thumbnail + ')' }">
+    <a  *ngFor="let video of videos" 
+        [routerLink]="'/v/' + video.id" 
+        class="card clickable">
+        <div class="card-img"
+            [ngStyle]="{ backgroundImage: 'url(' + vidService.BASE_URL + '/' + video.thumbnail + ')' }">
+        </div>
+        <div class="card-block">
+            <p class="card-text">
+                {{ video.title }}
+            </p>
+            <div>
+                <span class="label">{{ video.user?.name }}</span>
             </div>
-        </td>
+        </div>
+    </a>
 
-    </tr>
 </table>
