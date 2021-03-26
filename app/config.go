@@ -7,11 +7,9 @@ import (
 
 // Config settings for main App.
 type Config struct {
-	Library     []*PathConfig      `json:"library"`
 	Server      *ServerConfig      `json:"server"`
 	Thumbnailer *ThumbnailerConfig `json:"thumbnailer"`
 	Transcoder  *TranscoderConfig  `json:"transcoder"`
-	Feed        *FeedConfig        `json:"feed"`
 }
 
 // PathConfig settings for media library path.
@@ -43,28 +41,10 @@ type TranscoderConfig struct {
 	Sizes   Sizes `json:"sizes"`
 }
 
-// FeedConfig settings for App Feed.
-type FeedConfig struct {
-	ExternalURL string `json:"external_url"`
-	Title       string `json:"title"`
-	Link        string `json:"link"`
-	Description string `json:"description"`
-	Author      struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	} `json:"author"`
-	Copyright string `json:"copyright"`
-}
 
 // DefaultConfig returns Config initialized with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Library: []*PathConfig{
-			{
-				Path:   "videos",
-				Prefix: "",
-			},
-		},
 		Server: &ServerConfig{
 			Host:          "0.0.0.0",
 			Port:          8000,
@@ -78,9 +58,6 @@ func DefaultConfig() *Config {
 		Transcoder: &TranscoderConfig{
 			Timeout: 300,
 			Sizes:   Sizes(nil),
-		},
-		Feed: &FeedConfig{
-			ExternalURL: "http://localhost:8000",
 		},
 	}
 }

@@ -25,7 +25,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/prologic/tube/media"
 	"github.com/prologic/tube/models"
 	"github.com/prologic/tube/utils"
 	"github.com/renstrom/shortuuid"
@@ -40,11 +39,8 @@ import (
 // App represents main application.
 type App struct {
 	Config    *Config
-	Library   *media.Library
-	Store     Store
 	Watcher   *fsnotify.Watcher
 	Templates *templateStore
-	Feed      []byte
 	Listener  net.Listener
 	Router    *mux.Router
 	DataBase  *gorm.DB
@@ -58,15 +54,6 @@ func NewApp(cfg *Config) (*App, error) {
 	app := &App{
 		Config: cfg,
 	}
-	// Setup Library
-	app.Library = media.NewLibrary()
-	// Setup Store
-	store, err := NewBitcaskStore(cfg.Server.StorePath)
-	if err != nil {
-		err := fmt.Errorf("error opening store %s: %w", cfg.Server.StorePath, err)
-		return nil, err
-	}
-	app.Store = store
 	// Setup Watcher
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -101,14 +88,12 @@ func NewApp(cfg *Config) (*App, error) {
 
 	// Setup Router
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/", app.indexHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/v/list", app.listVideosHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/v/best", app.bestVideosHandler).Methods("GET")
 	router.HandleFunc("/v/{id}.mp4", app.getVideoHandler).Methods("GET")
 	router.HandleFunc("/v/{id}", app.getVideoInfoHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/user/{id}", app.getProfileHandler).Methods("GET", "OPTIONS")
 	router.HandleFunc("/user/{id}/video", app.getUserVideosHandler).Methods("GET", "OPTIONS")
-	router.HandleFunc("/feed.xml", app.rssHandler).Methods("GET")
 
 	router.HandleFunc("/auth/signup", app.apiCreateUserHandler).Methods("POST", "OPTIONS")
 	router.HandleFunc("/auth/login", app.loginHandler).Methods("POST", "OPTIONS")
@@ -126,9 +111,6 @@ func NewApp(cfg *Config) (*App, error) {
 	api.HandleFunc("/comment/{id}", app.apiGetCommentHandler).Methods("GET", "OPTIONS")
 	api.HandleFunc("/comment/{id}", app.apiDeleteCommentHandler).Methods("DELETE")
 	api.HandleFunc("/category", app.apiGetCategoriesHandler).Methods("GET", "OPTIONS")
-	// api.HandleFunc("/category", app.apiCreateCategorysHandler).Methods("POST")
-	// api.HandleFunc("/category/{id}", app.apiUpdateCategoryHandler).Methods("PUT", "OPTIONS")
-	// api.HandleFunc("/category/{id}", app.apiDeleteCategoryHandler).Methods("DELETE")
 
 	admin := router.PathPrefix("/admin").Subrouter()
 	admin.Use(app.jwtVerifyAdmin)
@@ -161,7 +143,6 @@ func NewApp(cfg *Config) (*App, error) {
 		handlers.AllowedOrigins([]string{"*"}),
 		handlers.AllowCredentials(),
 	)
-
 	router.Use(cors)
 
 	app.Router = router
@@ -183,22 +164,6 @@ func (app *App) Run() error {
 		return err
 	}
 
-	for _, pc := range app.Config.Library {
-		p := &media.Path{
-			Path:   pc.Path,
-			Prefix: pc.Prefix,
-		}
-		err = app.Library.AddPath(p)
-		if err != nil {
-			return err
-		}
-		err = app.Library.Import(p)
-		if err != nil {
-			return err
-		}
-		app.Watcher.Add(p.Path)
-	}
-
 	if err := os.MkdirAll(app.Config.Server.UploadPath, 0755); err != nil {
 		return fmt.Errorf(
 			"Error creating upload path %s: %w",
@@ -206,8 +171,6 @@ func (app *App) Run() error {
 		)
 	}
 
-	buildFeed(app)
-	go startWatcher(app)
 	return http.Serve(app.Listener, app.Router)
 }
 
@@ -223,7 +186,7 @@ func (app *App) render(name string, w http.ResponseWriter, ctx interface{}) {
 	}
 }
 
-// returns pagunation offset and limit from url parameters 
+// returns pagination offset and limit from url parameters 
 func getOffsetAndLimit(query url.Values) (int, int) {
 	var offset, limit int
 	offsets, ok := query["offset"]
@@ -249,38 +212,6 @@ func getCategory(query url.Values) int {
 		category, _ = strconv.Atoi(_categ[0])
 	}
 	return category
-}
-
-// HTTP handler for /
-func (app *App) indexHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("/")
-	pl := app.Library.Playlist()
-	if len(pl) > 0 {
-		http.Redirect(w, r, fmt.Sprintf("/v/%s?%s", pl[0].ID, r.URL.RawQuery), 302)
-	} else {
-		sort := strings.ToLower(r.URL.Query().Get("sort"))
-		quality := strings.ToLower(r.URL.Query().Get("quality"))
-		ctx := &struct {
-			Sort     string
-			Quality  string
-			Playing  *media.Video
-			Playlist media.Playlist
-		}{
-			Sort:     sort,
-			Quality:  quality,
-			Playing:  &media.Video{ID: ""},
-			Playlist: app.Library.Playlist(),
-		}
-
-		app.render("index", w, ctx)
-	}
-}
-
-// HTTP handler for /feed.xml
-func (app *App) rssHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "public, max-age=7776000")
-	w.Header().Set("Content-Type", "text/xml")
-	w.Write(app.Feed)
 }
 
 // HTTP handler for /auth/signup
